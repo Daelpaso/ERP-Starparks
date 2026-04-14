@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: "Rajdhani", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Orbitron", sans-serif;
+  
+  --color-sw-yellow: #FFE81F;
+  --color-sw-blue: #00a8ff;
+  --color-sw-red: #ff3838;
+  --color-sw-green: #2ecc71;
+  --color-bg-base: #000;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-base text-white font-sans transition-colors duration-300;
+  }
+  h1, h2, h3, .sw-title-font {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .stars {
+    background: #000 url('https://raw.githubusercontent.com/danielstuart14/CSS_Fills/master/star-wars-crawl/stars.png') repeat top center;
+    z-index: -2;
+    @apply fixed inset-0 w-full h-full block pointer-events-none;
+  }
+  
+  .twinkling {
+    background: transparent url('https://raw.githubusercontent.com/danielstuart14/CSS_Fills/master/star-wars-crawl/twinkling.png') repeat top center;
+    z-index: -1;
+    animation: move-stars 200s linear infinite;
+    @apply fixed inset-0 w-full h-full block pointer-events-none;
+  }
+
+  @keyframes move-stars {
+    from { transform: translateY(0); }
+    to { transform: translateY(-2000px); }
+  }
+
+  .btn-jedi {
+    @apply bg-sw-blue/10 border border-sw-blue text-sw-blue shadow-[0_0_5px_var(--color-sw-blue),inset_0_0_5px_var(--color-sw-blue)] transition-all duration-300;
+  }
+  .btn-jedi:hover {
+    @apply bg-sw-blue text-black shadow-[0_0_15px_var(--color-sw-blue),inset_0_0_10px_var(--color-sw-blue)];
+  }
+
+  .btn-sith {
+    @apply bg-sw-red/10 border border-sw-red text-sw-red shadow-[0_0_5px_var(--color-sw-red),inset_0_0_5px_var(--color-sw-red)] transition-all duration-300;
+  }
+  .btn-sith:hover {
+    @apply bg-sw-red text-black shadow-[0_0_15px_var(--color-sw-red),inset_0_0_10px_var(--color-sw-red)];
+  }
+
+  .btn-yoda {
+    @apply bg-sw-green/10 border border-sw-green text-sw-green shadow-[0_0_5px_var(--color-sw-green),inset_0_0_5px_var(--color-sw-green)] transition-all duration-300;
+  }
+  .btn-yoda:hover {
+    @apply bg-sw-green text-black shadow-[0_0_15px_var(--color-sw-green),inset_0_0_10px_var(--color-sw-green)];
+  }
+
+  .btn-gold {
+    @apply bg-sw-yellow/10 border border-sw-yellow text-sw-yellow shadow-[0_0_5px_var(--color-sw-yellow),inset_0_0_5px_var(--color-sw-yellow)] transition-all duration-300;
+  }
+  .btn-gold:hover {
+    @apply bg-sw-yellow text-black shadow-[0_0_15px_var(--color-sw-yellow),inset_0_0_10px_var(--color-sw-yellow)];
+  }
+
+  .panel-glass {
+    @apply bg-[#0a0f19]/80 backdrop-blur-xl border border-white/10;
+  }
+
+  .sw-title {
+    -webkit-text-stroke: 2px #FFE81F;
+    @apply text-transparent drop-shadow-[0_0_10px_rgba(255,232,31,0.3)];
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-sw-blue/30 rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-sw-blue/80;
+  }
+}
+
+.reduce-motion *, .reduce-motion .twinkling {
+  animation: none !important;
+  transition: none !important;
+}
+
+.light-mode {
+  --color-sw-yellow: #d97706 !important;
+  --color-sw-blue: #0369a1 !important;
+  --color-sw-green: #15803d !important;
+  --color-bg-base: #f1f5f9 !important;
+}
+
+.light-mode .panel-glass {
+  @apply !bg-white/90 !border-black/10 !shadow-md;
+}
+
+.light-mode .bg-black, 
+.light-mode .bg-black\/80, 
+.light-mode .bg-black\/60, 
+.light-mode .bg-black\/50, 
+.light-mode .bg-black\/40 {
+  @apply !bg-white !border-slate-200;
+}
+
+.light-mode .text-white { @apply !text-slate-900; }
+.light-mode .text-gray-200 { @apply !text-slate-800; }
+.light-mode .text-gray-300 { @apply !text-slate-700; }
+.light-mode .text-gray-400 { @apply !text-slate-600; }
+.light-mode .text-gray-500 { @apply !text-slate-500; }
+
+.light-mode .stars, .light-mode .twinkling {
+  @apply !hidden;
+}
+
+.light-mode .sw-title {
+  -webkit-text-stroke: 0px;
+  @apply !text-black !drop-shadow-none;
+}
+
+.high-contrast * {
+  @apply !backdrop-blur-none !shadow-none;
+}
+
+.high-contrast.light-mode .panel-glass, 
+.high-contrast.light-mode .bg-black {
+  @apply !bg-white !border-2 !border-black !text-black;
+}
+
+.high-contrast:not(.light-mode) .panel-glass, 
+.high-contrast:not(.light-mode) .bg-black {
+  @apply !bg-black !border-2 !border-sw-yellow !text-white;
+}
+
+/* Accessibility Font Sizes */
+.font-size-small { font-size: 14px; }
+.font-size-medium { font-size: 16px; }
+.font-size-large { font-size: 18px; }
+.font-size-xlarge { font-size: 20px; }
+
+.font-size-small .text-sm { font-size: 0.75rem; }
+.font-size-large .text-sm { font-size: 1rem; }
+.font-size-xlarge .text-sm { font-size: 1.125rem; }
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

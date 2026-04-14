@@ -1,0 +1,209 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System users (Admin, Cajero, Operario)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rut": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Cajero", "Operario"] },
+        "pin": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "rut", "name", "role", "pin", "active"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Vehicle categories (Sedán, SUV, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "factor": { "type": "number" }
+      },
+      "required": ["id", "name", "factor"]
+    },
+    "RawMaterial": {
+      "title": "RawMaterial",
+      "description": "Workshop inventory items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "uom": { "type": "string" },
+        "unitCost": { "type": "number" },
+        "stock": { "type": "number" },
+        "reorderPoint": { "type": "number" }
+      },
+      "required": ["id", "name", "uom", "unitCost", "stock", "reorderPoint"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Carwash services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "basePrice": { "type": "number" },
+        "recipe": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "itemId": { "type": "string" },
+              "qty": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["id", "name", "basePrice", "recipe"]
+    },
+    "StoreProduct": {
+      "title": "StoreProduct",
+      "description": "Express store products",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "icon": { "type": "string" },
+        "stock": { "type": "number" }
+      },
+      "required": ["id", "name", "price", "icon", "stock"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Registered clients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "plate": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "date": { "type": "number" },
+        "visits": { "type": "number" }
+      },
+      "required": ["id", "plate", "name", "phone", "date", "visits"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "Carwash jobs / transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "plate": { "type": "string" },
+        "categoryId": { "type": ["string", "null"] },
+        "serviceId": { "type": ["string", "null"] },
+        "status": { "type": "string" },
+        "serviceTotal": { "type": "number" },
+        "storeTotal": { "type": "number" },
+        "parkingFee": { "type": "number" },
+        "parkingMins": { "type": "number" },
+        "manualDiscount": { "type": "number" },
+        "total": { "type": "number" },
+        "cart": { "type": "array" },
+        "isDiscounted": { "type": "boolean" },
+        "entryDate": { "type": "number" },
+        "exitDate": { "type": ["number", "null"] },
+        "pickupTime": { "type": ["string", "null"] },
+        "paymentMethod": { "type": "string" },
+        "docType": { "type": "string" },
+        "timeline": { "type": "array" }
+      },
+      "required": ["id", "plate", "status", "total", "entryDate"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "Cash register shifts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "openedAt": { "type": "number" },
+        "closedAt": { "type": ["number", "null"] },
+        "openedBy": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "initialCash": { "type": "number" },
+        "declaredCash": { "type": ["number", "null"] },
+        "declaredCards": { "type": ["number", "null"] },
+        "declaredTransfers": { "type": ["number", "null"] },
+        "denominations": { "type": ["object", "null"] }
+      },
+      "required": ["id", "openedAt", "openedBy", "status", "initialCash"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Cash movements (income/expense)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shiftId": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "shiftId", "type", "amount", "reason", "timestamp", "userId"]
+    },
+    "ShiftAudit": {
+      "title": "Shift Audit",
+      "description": "Sensitive audit data for shifts (Admin only)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "systemCash": { "type": "number" },
+        "systemCards": { "type": "number" },
+        "systemTransfers": { "type": "number" },
+        "discrepancyCash": { "type": "number" },
+        "discrepancyCards": { "type": "number" },
+        "discrepancyTransfers": { "type": "number" }
+      },
+      "required": ["id", "systemCash", "systemCards", "systemTransfers"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "System users"
+    },
+    "categories": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Vehicle categories"
+    },
+    "rawMaterials": {
+      "schema": { "$ref": "#/entities/RawMaterial" },
+      "description": "Workshop inventory"
+    },
+    "services": {
+      "schema": { "$ref": "#/entities/Service" },
+      "description": "Carwash services"
+    },
+    "storeProducts": {
+      "schema": { "$ref": "#/entities/StoreProduct" },
+      "description": "Express store products"
+    },
+    "clients": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Registered clients"
+    },
+    "jobs": {
+      "schema": { "$ref": "#/entities/Job" },
+      "description": "Carwash jobs / transactions"
+    },
+    "shifts": {
+      "schema": { "$ref": "#/entities/Shift" },
+      "description": "Cash register shifts"
+    },
+    "shifts_audit": {
+      "schema": { "$ref": "#/entities/ShiftAudit" },
+      "description": "Sensitive audit data"
+    },
+    "transactions": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Cash movements"
+    }
+  }
+}
