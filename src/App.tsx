@@ -213,7 +213,8 @@ export default function App() {
 
   // Auth State
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null); // The mapped user from DB
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [impersonatedUserId, setImpersonatedUserId] = useState<string | null>(sessionStorage.getItem('impersonatedUserId'));
   const [isAuthReady, setIsAuthReady] = useState(false);
   
   // Data State
@@ -338,7 +339,7 @@ export default function App() {
 
   const hasPermission = (permissionId: string) => {
     if (!currentUser) return false;
-    if (currentUser.email === 'inversioneselcactus@gmail.com') return true;
+    if (currentUser.email === 'inversioneselcactus@gmail.com' || currentUser.email === 'daelpaso.digital@gmail.com') return true;
     
     // Check dynamic permissions first
     if (currentUser.permissions && currentUser.permissions[permissionId] !== undefined) {
@@ -414,26 +415,37 @@ export default function App() {
       showToast('SMS enviado automáticamente', 'success');
       setSmsNotificationJobId(null);
     }
-    return () => clearInterval(timer);
+    return () => timer && clearInterval(timer);
   }, [smsNotificationJobId, smsCountdown]);
 
   // --- Effects ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
       if (user) {
+        setFirebaseUser(user);
         // Check if user exists in DB or is the default admin
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           setCurrentUser({ id: user.uid, ...userDoc.data() });
-        } else if (user.email === 'inversioneselcactus@gmail.com' || user.email === 'starparkiquique@gmail.com') {
+        } else if (user.email === 'inversioneselcactus@gmail.com' || user.email === 'starparkiquique@gmail.com' || user.email === 'daelpaso.digital@gmail.com') {
           // Bootstrap default admin
+          let rut = '11111111-1';
+          let name = user.displayName || 'Admin Principal';
+
+          if (user.email === 'starparkiquique@gmail.com') {
+            rut = '22222222-2';
+            name = user.displayName || 'StarPark Iquique';
+          } else if (user.email === 'daelpaso.digital@gmail.com') {
+            rut = '33333333-3';
+            name = user.displayName || 'Braulio Admin';
+          }
+
           const adminData = {
             id: user.uid,
-            rut: user.email === 'starparkiquique@gmail.com' ? '22222222-2' : '11111111-1',
-            name: user.displayName || (user.email === 'starparkiquique@gmail.com' ? 'StarPark Iquique' : 'Admin Principal'),
+            rut: rut,
+            name: name,
             role: 'Admin',
-            pin: '1234',
+            pin: '3142', // Changing default pin for new superadmin
             active: true,
             email: user.email
           };
@@ -454,12 +466,29 @@ export default function App() {
           setCurrentUser(newUserData);
         }
       } else {
+        setFirebaseUser(null);
         setCurrentUser(null);
+        setImpersonatedUserId(null);
+        sessionStorage.removeItem('impersonatedUserId');
       }
       setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
+
+  // Handle Impersonation
+  useEffect(() => {
+    if (impersonatedUserId && users.length > 0) {
+      const targetUser = users.find((u: any) => u.id === impersonatedUserId);
+      if (targetUser) {
+        setCurrentUser(targetUser);
+      }
+    } else if (!impersonatedUserId && firebaseUser && users.length > 0) {
+      // Revert to real user if impersonation cleared
+      const realUser = users.find((u: any) => u.id === firebaseUser.uid);
+      if (realUser) setCurrentUser(realUser);
+    }
+  }, [impersonatedUserId, users, firebaseUser]);
 
   useEffect(() => {
     if (!isAuthReady || !firebaseUser) return;
@@ -625,12 +654,16 @@ export default function App() {
           >
             <Menu size={24} />
           </button>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-sw-yellow rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(255,232,31,0.5)]">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group" 
+            onClick={() => setActiveTab('pos')}
+            title="Ir a Inicio (POS)"
+          >
+            <div className="w-10 h-10 bg-sw-yellow rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(255,232,31,0.5)] group-hover:scale-110 transition-transform">
               <Zap size={24} className="text-black fill-black" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter sw-title-font leading-none sw-title">STARPARKS</h1>
+              <h1 className="text-xl font-black tracking-tighter sw-title-font leading-none sw-title group-hover:text-white transition-colors">STARPARKS</h1>
               <p className="text-[10px] text-sw-yellow font-bold uppercase tracking-[0.3em] mt-0.5">Carwash Pro V1</p>
             </div>
           </div>
@@ -676,7 +709,7 @@ export default function App() {
             <nav className="space-y-2 flex-1">
               {navItems.map((item) => {
                 const isConfigModule = ['boveda', 'tarifas', 'usuarios'].includes(item.id);
-                const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com';
+                const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
                 const isAllowed = isSuperAdmin || (!isConfigModule && (!item.role || (currentUser && (currentUser.role === item.role || currentUser.role === 'Admin'))));
                 
                 return (
@@ -860,6 +893,14 @@ export default function App() {
                     setUserModalId={setUserModalId}
                     setShowUserCreateModal={setShowUserCreateModal}
                     hasPermission={hasPermission}
+                    impersonatedUserId={impersonatedUserId}
+                    realUserEmail={firebaseUser?.email}
+                    setImpersonatedUserId={(id: string | null) => {
+                      if (id) sessionStorage.setItem('impersonatedUserId', id);
+                      else sessionStorage.removeItem('impersonatedUserId');
+                      setImpersonatedUserId(id);
+                      window.location.reload();
+                    }}
                   />
                 </AuthGuard>
               )}
@@ -1061,7 +1102,7 @@ export default function App() {
             users={users}
             onClose={() => setUserModalId(null)}
             showToast={showToast}
-            isSuperAdmin={currentUser?.email === 'inversioneselcactus@gmail.com'}
+            isSuperAdmin={currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com'}
             togglePermission={async (userId: string, permission: string) => {
               const user = users.find((u: any) => u.id === userId);
               const currentPermissions = user.permissions || {};

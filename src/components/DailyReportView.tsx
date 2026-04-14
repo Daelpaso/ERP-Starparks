@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar, Download, TrendingUp, DollarSign, ShoppingCart, Car, Clock, History, LayoutGrid, List, Search, Filter } from 'lucide-react';
-import { exportToExcel } from '../lib/utils';
+import { exportToExcel, exportToPDF } from '../lib/utils';
 import { ShiftHistoryView } from './ShiftManagement';
 
 export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, initialSubTab, currentUser, showToast }: any) => {
@@ -87,6 +87,25 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
     exportToExcel(`reporte_${dateRange.start}_${dateRange.end}.xlsx`, [...summary, { Concepto: '', Valor: '' }, ...data]);
   };
 
+  const handleExportPDF = () => {
+    const summaryData = [
+      { label: 'Rango', value: `${dateRange.start} a ${dateRange.end}` },
+      { label: 'Vehículos Ingresados', value: String(reportData.jobsCount) },
+      { label: 'Vehículos Entregados', value: String(reportData.deliveredCount) },
+      { label: 'Recaudación Total', value: `$${reportData.revenue.total.toLocaleString('es-CL')}` },
+      { label: 'Lavado', value: `$${reportData.revenue.lavado.toLocaleString('es-CL')}` },
+      { label: 'Tienda', value: `$${reportData.revenue.tienda.toLocaleString('es-CL')}` },
+      { label: 'Efectivo', value: `$${reportData.revenue.efectivo.toLocaleString('es-CL')}` },
+      { label: 'Tarjeta', value: `$${reportData.revenue.tarjeta.toLocaleString('es-CL')}` },
+      { label: 'Transferencia', value: `$${reportData.revenue.transferencia.toLocaleString('es-CL')}` },
+    ];
+    const headers = ['ID', 'Patente', 'Estado', 'Total', 'Método Pago', 'Fecha'];
+    const rows = reportData.jobs.map((j: any) => [
+      j.id, j.plate, j.status, `$${(j.total || 0).toLocaleString('es-CL')}`, j.paymentMethod || '-', new Date(j.entryDate).toLocaleString('es-CL')
+    ]);
+    exportToPDF(`Reporte de Ventas`, headers, rows, summaryData);
+  };
+
   return (
     <div className="space-y-6">
       {!initialSubTab && (
@@ -162,9 +181,15 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
               </div>
               <button 
                 onClick={handleExport}
-                className="flex-1 lg:flex-none px-6 py-2.5 rounded-xl bg-sw-blue/10 border border-sw-blue text-sw-blue hover:bg-sw-blue hover:text-black transition-all font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                className="flex-1 lg:flex-none px-4 py-2.5 rounded-xl bg-sw-blue/10 border border-sw-blue text-sw-blue hover:bg-sw-blue hover:text-black transition-all font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2"
               >
-                <Download size={18} /> Exportar
+                <Download size={16} /> Excel
+              </button>
+              <button 
+                onClick={handleExportPDF}
+                className="flex-1 lg:flex-none px-4 py-2.5 rounded-xl bg-sw-red/10 border border-sw-red text-sw-red hover:bg-sw-red hover:text-white transition-all font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+              >
+                <Download size={16} /> PDF
               </button>
             </div>
           </div>

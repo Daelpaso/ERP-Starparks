@@ -1,4 +1,6 @@
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export const validarPatenteChilena = (patente: string) => {
   if (!patente) return false;
@@ -130,4 +132,70 @@ export const sendShiftEmail = async (type: 'start' | 'end', shift: any, summary?
 
   // We return a promise to simulate network latency
   return new Promise((resolve) => setTimeout(resolve, 1500));
+};
+
+export const exportToPDF = (title: string, headers: string[], rows: any[][], summaryData?: {label: string, value: string}[]) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Header
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('STARPARKS', 14, 20);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Carwash Pro V1', 14, 25);
+
+  // Title
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(title, 14, 35);
+
+  // Date
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, 14, 41);
+
+  let startY = 48;
+
+  // Summary table
+  if (summaryData && summaryData.length > 0) {
+    autoTable(doc, {
+      startY,
+      head: [['Concepto', 'Valor']],
+      body: summaryData.map(s => [s.label, s.value]),
+      theme: 'grid',
+      headStyles: { fillColor: [0, 168, 255], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { left: 14, right: 14 },
+    });
+    startY = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  // Detail table
+  if (rows.length > 0) {
+    autoTable(doc, {
+      startY,
+      head: [headers],
+      body: rows,
+      theme: 'striped',
+      headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      bodyStyles: { fontSize: 7 },
+      alternateRowStyles: { fillColor: [248, 248, 248] },
+      margin: { left: 14, right: 14 },
+    });
+  }
+
+  // Footer
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, doc.internal.pageSize.getHeight() - 10);
+    doc.text('STARPARKS — Documento generado automáticamente', 14, doc.internal.pageSize.getHeight() - 10);
+  }
+
+  doc.save(`${title.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
 };

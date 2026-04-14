@@ -725,7 +725,7 @@ export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, cu
   }, [columns]);
 
   const handleDeleteShift = async (shiftId: string) => {
-    const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com';
+    const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
     const isAdmin = currentUser?.role === 'Admin' || isSuperAdmin;
 
     if (!isAdmin) {

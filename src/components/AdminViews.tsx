@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, Plus, Trash2, Edit2, Save, X, DollarSign, UserPlus, Shield, Users, Download, TrendingUp } from 'lucide-react';
+import { Package, Plus, Trash2, Edit2, Save, X, DollarSign, UserPlus, Shield, Users, Download, TrendingUp, RefreshCcw, UserCheck, UserX } from 'lucide-react';
 import { exportToExcel } from '../lib/utils';
 import { doc, updateDoc, deleteDoc, db } from '../firebase';
 import { DailyReportView } from './DailyReportView';
@@ -201,7 +201,7 @@ export const PricingView = ({ services, setServices, storeProducts, setStoreProd
 };
 
 export const UsersView = ({ users, setUsers, showToast, currentUser, setUserModalId, setShowUserCreateModal }: any) => {
-  const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com';
+  const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
 
   const handleExport = () => {
     exportToExcel('usuarios.xlsx', users);
@@ -329,10 +329,16 @@ export const ConfigView = ({
   a11y, setA11y, showToast, 
   users, setUsers, currentUser, 
   setUserModalId, setShowUserCreateModal,
-  hasPermission
+  hasPermission,
+  impersonatedUserId, setImpersonatedUserId,
+  realUserEmail
 }: any) => {
   const [activeTab, setActiveTab] = useState('general');
-  const isAdmin = currentUser?.role === 'Admin' || currentUser?.email === 'inversioneselcactus@gmail.com';
+  const isDeveloper = realUserEmail === 'daelpaso.digital@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
+  const isSuperAdmin = realUserEmail === 'inversioneselcactus@gmail.com' || currentUser?.email === 'inversioneselcactus@gmail.com' || isDeveloper;
+  const isAdmin = currentUser?.role === 'Admin' || isSuperAdmin;
+  const [selectedSimUser, setSelectedSimUser] = useState(impersonatedUserId || '');
+
 
   const emailConfig = {
     notifyAdmin: true,
@@ -364,9 +370,82 @@ export const ConfigView = ({
             Gestión de Personal
           </button>
         )}
+        {isDeveloper && (
+          <button 
+            onClick={() => setActiveTab('dev')}
+            className={`px-6 py-3 font-bold uppercase tracking-widest text-xs transition-all border-b-2 ${activeTab === 'dev' ? 'border-sw-red text-sw-red bg-sw-red/5' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+          >
+            Dev Options
+          </button>
+        )}
       </div>
 
-      {activeTab === 'general' ? (
+      {activeTab === 'dev' && isDeveloper && (
+        <div className="panel-glass p-8 rounded-2xl border border-sw-red/30 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center gap-4 text-sw-red">
+            <div className="w-12 h-12 rounded-full bg-sw-red/20 flex items-center justify-center border border-sw-red/50">
+              <RefreshCcw size={28} className="animate-spin-slow" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black sw-title-font uppercase tracking-widest">Opciones de Desarrollador</h2>
+              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em]">Simulación de Entorno y Permisos</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Seleccionar Identidad a Simular</label>
+              <div className="flex gap-3">
+                <select 
+                  value={selectedSimUser}
+                  onChange={(e) => setSelectedSimUser(e.target.value)}
+                  className="flex-1 bg-black/50 border border-gray-800 rounded-xl p-4 text-white font-mono text-sm outline-none focus:border-sw-red transition-all"
+                >
+                  <option value="">(Usuario Real)</option>
+                  {users.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={() => setImpersonatedUserId(selectedSimUser || null)}
+                  className={`px-6 rounded-xl font-bold uppercase tracking-widest text-xs flex items-center gap-2 transition-all ${selectedSimUser ? 'bg-sw-red text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                >
+                  {selectedSimUser ? <UserCheck size={18} /> : <UserX size={18} />}
+                  Simular
+                </button>
+              </div>
+              <p className="text-[9px] text-gray-600 font-mono leading-relaxed">
+                Al activar la simulación, la aplicación se recargará y actuará como si fueras el usuario seleccionado. 
+                Los permisos y la vista se ajustarán dinámicamente.
+              </p>
+            </div>
+
+            <div className="p-6 bg-sw-red/5 border border-sw-red/20 rounded-2xl space-y-4">
+              <h3 className="text-sm font-bold text-sw-red uppercase tracking-widest">Estado de Simulación</h3>
+              <div className="flex justify-between items-center bg-black/40 p-4 rounded-xl">
+                <span className="text-xs text-gray-400">Usuario Activo:</span>
+                <span className="text-xs font-mono font-bold text-white">{currentUser?.name}</span>
+              </div>
+              <div className="flex justify-between items-center bg-black/40 p-4 rounded-xl">
+                <span className="text-xs text-gray-400">Rol Detectado:</span>
+                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${currentUser?.role === 'Admin' ? 'bg-sw-red/20 text-sw-red' : 'bg-sw-blue/20 text-sw-blue'}`}>
+                  {currentUser?.role}
+                </span>
+              </div>
+              {impersonatedUserId && (
+                <button 
+                  onClick={() => setImpersonatedUserId(null)}
+                  className="w-full py-3 mt-2 bg-gray-800 hover:bg-white/10 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
+                >
+                  Detener Simulación y Volver a Real
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'general' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="panel-glass p-8 rounded-2xl border border-sw-blue/20">
             <h3 className="text-xl font-black text-sw-blue uppercase tracking-tighter mb-6 flex items-center gap-3">
@@ -480,18 +559,12 @@ export const ConfigView = ({
                   </div>
                 </div>
               </div>
-
-              <div className="p-4 bg-sw-red/5 rounded-xl border border-sw-red/20">
-                <p className="text-sm font-bold text-sw-red uppercase tracking-widest mb-1">Zona de Peligro</p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Acciones irreversibles del sistema</p>
-                <button className="w-full py-3 bg-sw-red/10 border border-sw-red/30 text-sw-red rounded-lg font-bold uppercase tracking-widest text-xs hover:bg-sw-red hover:text-white transition-all">
-                  Reiniciar Base de Datos
-                </button>
-              </div>
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'usuarios' && isAdmin && (
         <UsersView 
           users={users} 
           setUsers={setUsers} 
