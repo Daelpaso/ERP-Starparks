@@ -43,7 +43,7 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
   , [categories]);
 
   const existingClient = clients.find((c: any) => c.plate === plate.toUpperCase().replace(/-/g, ''));
-  const isTenthVisit = existingClient && existingClient.visits === 9;
+  const isFreeWash = existingClient && ((existingClient.visits % 7) === 6);
   const isNewClient = validarPatenteChilena(plate) && !existingClient;
   const isPlateFilled = plate.length >= 5;
 
@@ -51,9 +51,9 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
     const cat = filteredCategories.find((c: any) => c.id === selectedCat);
     const srv = services?.find((s: any) => s.id === selectedService);
     let base = (srv?.basePrice || 0) * (cat?.factor || 1);
-    if (isTenthVisit) base = base * 0.7;
+    if (isFreeWash) base = 0; // 100% OFF for 6+1
     return base;
-  }, [selectedCat, selectedService, isTenthVisit, services, filteredCategories]);
+  }, [selectedCat, selectedService, isFreeWash, services, filteredCategories]);
 
   const discountAmount = useMemo(() => {
     if (!discountApplied) return 0;
@@ -101,7 +101,7 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
       catName: filteredCategories.find((c: any) => c.id === selectedCat)?.name,
       srvName: services?.find((s: any) => s.id === selectedService)?.name,
       total: finalTotal, discountAmount,
-      isDiscounted: isTenthVisit || discountApplied,
+      isDiscounted: isFreeWash || discountApplied,
       pickupTime: estimatedPickupTime,
       isNewClient, clientName, clientPhone, clientEmail, addonCart
     });
@@ -174,51 +174,77 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
 
       {/* ─── CONFIRMATION MODAL ─── */}
       {pendingSale && (
-        <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="panel-glass rounded-2xl w-full max-w-md border border-sw-yellow/40 shadow-[0_0_40px_rgba(255,232,31,0.1)] flex flex-col">
-            <div className="flex items-center gap-3 p-5 border-b border-sw-yellow/20 bg-sw-yellow/5 rounded-t-2xl">
-              <ShieldCheck size={22} className="text-sw-yellow" />
-              <span className="sw-title-font text-sw-yellow tracking-widest text-lg">CONFIRMAR INGRESO</span>
+        <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="panel-glass rounded-2xl w-full max-w-2xl border border-sw-yellow/40 shadow-[0_0_40px_rgba(255,232,31,0.1)] flex flex-col my-8">
+            <div className="flex items-center justify-center gap-3 p-6 border-b border-sw-yellow/20 bg-sw-yellow/5 rounded-t-2xl">
+              <ShieldCheck size={28} className="text-sw-yellow" />
+              <span className="sw-title-font text-sw-yellow tracking-widest text-2xl">CONFIRMAR INGRESO</span>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 uppercase tracking-widest text-xs font-bold">Patente</span>
-                <span className="font-mono text-sw-blue font-black text-2xl">{pendingSale.plate}</span>
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-center border-b border-gray-800 pb-4">
+                <span className="text-gray-400 uppercase tracking-widest text-sm font-bold">Patente</span>
+                <span className="font-mono text-sw-blue font-black text-4xl">{pendingSale.plate}</span>
               </div>
-              <div className="flex justify-between"><span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Servicio</span><span className="text-white font-semibold text-sm text-right max-w-xs">{pendingSale.srvName}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Clase</span><span className="text-white font-semibold text-sm">{pendingSale.catName}</span></div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                   <div className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Servicio</div>
+                   <div className="text-white font-bold text-lg">{pendingSale.srvName || 'Solo Tienda'}</div>
+                 </div>
+                 <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                   <div className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Clase</div>
+                   <div className="text-white font-bold text-lg">{pendingSale.catName || 'N/A'}</div>
+                 </div>
+              </div>
+              
               {pendingSale.pickupTime && (
-                <div className="flex justify-between bg-sw-yellow/10 p-3 rounded-xl border border-sw-yellow/30">
-                  <span className="text-sw-yellow text-xs font-bold uppercase tracking-widest flex items-center gap-2"><Clock size={14} /> Retiro Est.</span>
-                  <span className="text-sw-yellow font-mono font-black text-xl">{pendingSale.pickupTime}</span>
+                <div className="flex justify-between items-center bg-sw-yellow/10 p-5 rounded-xl border border-sw-yellow/30">
+                  <span className="text-sw-yellow text-sm font-bold uppercase tracking-widest flex items-center gap-2"><Clock size={18} /> Retiro Est.</span>
+                  <span className="text-sw-yellow font-mono font-black text-3xl">{pendingSale.pickupTime}</span>
                 </div>
               )}
+              
               {pendingSale.addonCart?.length > 0 && (
-                <div className="bg-sw-green/5 p-3 rounded-xl border border-sw-green/20 space-y-1">
-                  <span className="text-[10px] text-sw-green font-bold uppercase tracking-widest">+ {pendingSale.addonCart.length} producto(s) tienda</span>
+                <div className="bg-sw-green/5 p-5 rounded-xl border border-sw-green/20 space-y-3">
+                  <span className="text-xs text-sw-green font-bold uppercase tracking-widest block border-b border-sw-green/20 pb-2">PRODUCTOS TIENDA ({pendingSale.addonCart.length})</span>
                   {pendingSale.addonCart.map((item: any, i: number) => (
-                    <div key={i} className="flex justify-between text-xs text-gray-400">
-                      <span>{item.icon} {item.name}</span>
-                      <span className="text-sw-yellow font-mono">${item.price.toLocaleString('es-CL')}</span>
+                    <div key={i} className="flex justify-between items-center text-sm">
+                      <span className="text-white font-bold uppercase tracking-wider">{item.name}</span>
+                      <span className="text-sw-yellow font-mono font-bold">${item.price.toLocaleString('es-CL')}</span>
                     </div>
                   ))}
                 </div>
               )}
+              
               {pendingSale.isNewClient && (
-                <div className="bg-sw-blue/10 p-3 rounded-xl border border-sw-blue/30">
-                  <div className="text-xs text-sw-blue mb-1 font-bold uppercase tracking-widest">Nuevo Cliente</div>
-                  <div className="font-bold text-white">{pendingSale.clientName}</div>
-                  <div className="text-gray-400 font-mono text-sm">{pendingSale.clientPhone}</div>
+                <div className="bg-sw-blue/10 p-5 rounded-xl border border-sw-blue/30 flex justify-between items-center">
+                  <div>
+                    <div className="text-xs text-sw-blue mb-1 font-bold uppercase tracking-widest">Nuevo Cliente</div>
+                    <div className="font-bold text-white text-lg">{pendingSale.clientName}</div>
+                  </div>
+                  <div className="text-gray-400 font-mono text-lg">{pendingSale.clientPhone}</div>
                 </div>
               )}
-              <div className="border-t border-gray-700 pt-4 flex justify-between items-end">
-                <span className="text-gray-400 font-bold uppercase tracking-widest text-xs">Total</span>
-                <span className="text-4xl font-black text-sw-green font-mono">${pendingSale.total.toLocaleString('es-CL')}</span>
+              
+              <div className="border-t border-gray-700 pt-6 flex justify-between items-center bg-black/40 p-6 rounded-xl border border-sw-green/20">
+                <span className="text-gray-400 font-bold uppercase tracking-widest text-sm">Total Estimado</span>
+                <span className="text-5xl font-black text-sw-green font-mono">${pendingSale.total.toLocaleString('es-CL')}</span>
               </div>
             </div>
-            <div className="p-4 flex gap-3 border-t border-gray-800 bg-black/40 rounded-b-2xl">
-              <button onClick={() => setPendingSale(null)} className="flex-1 bg-black border border-gray-700 hover:border-sw-red hover:text-sw-red text-gray-400 py-3.5 rounded-xl font-bold uppercase tracking-widest transition-all text-sm">Cancelar</button>
-              <button onClick={confirmSale} className="flex-1 btn-jedi py-3.5 rounded-xl font-bold uppercase tracking-widest text-sm">Confirmar</button>
+            <div className="p-5 flex gap-4 border-t border-gray-800 bg-black/40 rounded-b-2xl">
+              <button 
+                onClick={() => {
+                  const pin = window.prompt('Ingrese PIN de Administrador (1124) para cancelar:');
+                  if (pin === '1124') {
+                    setPendingSale(null);
+                  } else if (pin !== null) {
+                    showToast('PIN Incorrecto', 'error');
+                  }
+                }} 
+                className="flex-[0.5] bg-black border border-gray-700 hover:border-sw-red hover:text-sw-red text-gray-400 py-4 rounded-xl font-bold uppercase tracking-widest transition-all text-sm"
+              >
+                Cancelar
+              </button>
+              <button onClick={confirmSale} className="flex-1 btn-jedi py-4 rounded-xl font-bold uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(46,204,113,0.3)]">Confirmar Ingreso</button>
             </div>
           </div>
         </div>
@@ -247,7 +273,7 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
                 onClick={() => {
                   const w = window.open('', '', 'width=400,height=600');
                   const c = document.getElementById('printable-ticket');
-                  if (w && c) { w.document.write(`<html><head><title>Ticket</title><style>body{font-family:monospace;padding:20px}*{box-sizing:border-box}.flex{display:flex}.justify-between{justify-content:space-between}</style></head><body>${c.innerHTML}</body></html>`); w.document.close(); w.focus(); w.print(); w.close(); }
+                  if (w && c) { w.document.write(`<html><head><title>Ticket</title><style>body{font-family:monospace;padding:0;margin:0 auto;width:58mm;font-size:12px;color:#000}*{box-sizing:border-box}.flex{display:flex}.justify-between{justify-content:space-between}.text-center{text-align:center}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mt-3{margin-top:0.75rem}.pb-4{padding-bottom:1rem}.pt-4{padding-top:1rem}.border-b-2{border-bottom:2px dashed #000}.border-t-2{border-top:2px dashed #000}.text-2xl{font-size:1.5rem}.text-lg{font-size:1.125rem}.text-xs{font-size:0.75rem}.font-black{font-weight:900}.font-bold{font-weight:700}.uppercase{text-transform:uppercase}.space-y-2>*{margin-top:0.5rem;margin-bottom:0}@page{margin:0;padding:0}@media print{body{width:58mm;margin:0;padding:2mm}}</style></head><body>${c.innerHTML}</body></html>`); w.document.close(); w.focus(); w.print(); w.close(); }
                 }}
                 className="flex-1 btn-jedi py-3 rounded-xl font-bold uppercase tracking-widest text-xs"
               >Imprimir</button>
@@ -258,10 +284,10 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
 
       {/* ─── TAB SWITCHER ─── */}
       <div className="flex gap-3 justify-center flex-shrink-0">
-        <button onClick={() => setPosTab('lavado')} className={`flex items-center gap-2.5 px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all border ${posTab === 'lavado' ? 'bg-sw-blue/10 border-sw-blue text-sw-blue shadow-[0_0_20px_rgba(0,168,255,0.15)]' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-200 hover:border-gray-600'}`}>
+        <button onClick={() => setPosTab('lavado')} className={`flex items-center gap-2.5 px-8 py-3 rounded-xl font-ui font-bold uppercase tracking-widest text-sm transition-all border ${posTab === 'lavado' ? 'bg-sw-blue/10 border-sw-blue text-sw-blue shadow-[0_0_20px_rgba(0,168,255,0.15)]' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-200 hover:border-gray-600'}`}>
           <Car size={20} /> Ingreso Lavado
         </button>
-        <button onClick={() => setPosTab('tienda')} className={`flex items-center gap-2.5 px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all border ${posTab === 'tienda' ? 'bg-sw-green/10 border-sw-green text-sw-green shadow-[0_0_20px_rgba(46,204,113,0.15)]' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-200 hover:border-gray-600'}`}>
+        <button onClick={() => setPosTab('tienda')} className={`flex items-center gap-2.5 px-8 py-3 rounded-xl font-ui font-bold uppercase tracking-widest text-sm transition-all border ${posTab === 'tienda' ? 'bg-sw-green/10 border-sw-green text-sw-green shadow-[0_0_20px_rgba(46,204,113,0.15)]' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-200 hover:border-gray-600'}`}>
           <Store size={20} /> Tienda Exprés
         </button>
       </div>
@@ -349,30 +375,38 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
             {/* ── Hora de Retiro ── */}
             <div className="p-5">
               <label className="text-sm font-bold uppercase tracking-[0.15em] text-gray-400 mb-3 block">Hora de Retiro Estimada (Opcional)</label>
-              <div className="flex gap-2">
-                {[
-                  { val: '', label: 'Sin hora' },
-                  { val: '1h', label: '+1 hora' },
-                  { val: '2h', label: '+2 horas' },
-                  { val: '3h', label: '+3 horas' },
-                  { val: 'custom', label: 'Personalizada' },
-                ].map(opt => (
-                  <button
-                    key={opt.val}
-                    onClick={() => { setPickupMode(opt.val); if (opt.val === 'custom') setShowTimePicker(true); else setCustomPickupTime(''); }}
-                    className={`flex-1 py-3.5 rounded-xl text-sm font-bold uppercase tracking-wider border transition-all ${pickupMode === opt.val ? 'bg-sw-yellow/15 border-sw-yellow text-sw-yellow' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600'}`}
-                  >{opt.label}</button>
-                ))}
-              </div>
-              {estimatedPickupTime && (
-                <div className="mt-3 flex justify-center">
-                  <div className="bg-sw-yellow/10 border border-sw-yellow/50 px-6 py-3 rounded-xl inline-flex items-center gap-3">
-                    <Clock size={20} className="text-sw-yellow" />
-                    <span className="text-sw-yellow font-mono font-black text-2xl">{estimatedPickupTime}</span>
-                    <span className="text-sw-yellow text-sm font-bold uppercase tracking-widest">Retiro</span>
-                  </div>
+              <div className="flex flex-col lg:flex-row gap-4 items-start">
+                <div className="grid grid-cols-2 gap-2 flex-1 w-full">
+                  {[
+                    { val: '', label: 'Sin hora' },
+                    { val: '1h', label: '+1 hora' },
+                    { val: '2h', label: '+2 horas' },
+                    { val: '5h', label: '+5 horas' },
+                    { val: '18:00', label: '18:00 hrs' },
+                    { val: 'custom', label: 'Personalizada' },
+                  ].map(opt => (
+                    <button
+                      key={opt.val}
+                      onClick={() => { 
+                        setPickupMode(opt.val); 
+                        if (opt.val === 'custom') setShowTimePicker(true); 
+                        else if (opt.val === '18:00') setCustomPickupTime('18:00');
+                        else setCustomPickupTime(''); 
+                      }}
+                      className={`py-4 rounded-xl text-sm font-bold uppercase tracking-wider border transition-all ${pickupMode === opt.val ? 'bg-sw-yellow/15 border-sw-yellow text-sw-yellow' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600'}`}
+                    >{opt.label}</button>
+                  ))}
                 </div>
-              )}
+                {estimatedPickupTime && (
+                  <div className="lg:w-1/3 flex justify-center w-full mt-2 lg:mt-0">
+                    <div className="bg-sw-yellow/10 border border-sw-yellow/50 px-6 py-6 rounded-xl flex flex-col items-center justify-center gap-2 w-full h-full">
+                      <Clock size={24} className="text-sw-yellow mb-1" />
+                      <span className="text-sw-yellow font-mono font-black text-3xl">{estimatedPickupTime}</span>
+                      <span className="text-sw-yellow text-xs font-bold uppercase tracking-widest text-center mt-1">Estimación<br/>Retiro</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ── Addon Cart ── */}
@@ -384,74 +418,38 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {addonCart.map((item, idx) => (
-                    <span key={idx} className="text-sm bg-black/50 px-3 py-1.5 rounded-lg text-gray-300 flex items-center gap-1.5 border border-gray-800">
-                      {item.icon} {item.name}
-                      <button onClick={() => setAddonCart(addonCart.filter((_, i) => i !== idx))} className="text-gray-600 hover:text-sw-red ml-1"><X size={12} /></button>
+                    <span key={idx} className="text-sm bg-black/50 px-3 py-1.5 rounded-lg text-gray-300 flex items-center gap-1.5 border border-gray-800 font-bold uppercase">
+                      {item.name}
+                      <button onClick={() => setAddonCart(addonCart.filter((_, i) => i !== idx))} className="text-gray-600 hover:text-sw-red ml-1"><X size={14} /></button>
                     </span>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* ── Add product shortcut ── */}
-            <div className="px-5 pb-5 border-t border-gray-800/60">
-              <button
-                onClick={() => setPosTab('tienda')}
-                className="w-full mt-3 py-3.5 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-green hover:border-sw-green/40 hover:bg-sw-green/5 transition-all text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2"
-              >
-                <ShoppingCart size={16} /> Agregar Producto de Tienda
-              </button>
-            </div>
           </div>
 
           {/* RIGHT COLUMN — Total + Descuento + CTA (2/5) */}
           <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
 
-            {/* Total Card — compacto */}
-            <div className="panel-glass rounded-2xl p-5 border border-gray-800">
-              <div className="text-sm font-bold uppercase tracking-[0.15em] text-gray-500 mb-1 flex items-center gap-2">
-                <Sparkles size={14} className="text-sw-yellow" /> Total Estimado
-              </div>
-              <div className="text-4xl font-black text-sw-green font-mono tracking-tight">
-                ${finalTotal.toLocaleString('es-CL')}
-              </div>
-
-              <div className="mt-3 space-y-1.5">
-                {selectedServiceObj && (
-                  <div className="flex justify-between items-center text-base text-gray-400">
-                    <span>Duración estimada</span>
-                    <span className="font-mono font-bold text-gray-200">~{selectedServiceObj.estimatedDuration || '?'} min</span>
-                  </div>
-                )}
-                {isTenthVisit && (
-                  <div className="bg-sw-green/10 border border-sw-green/30 text-sw-green text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2 animate-pulse">
-                    <CheckCircle2 size={16} /> 10° Visita — 30% OFF
-                  </div>
-                )}
-                {discountApplied && (
-                  <div className="bg-sw-yellow/10 border border-sw-yellow/30 text-sw-yellow text-sm font-bold px-4 py-2 rounded-xl">
-                    Descuento: -${discountAmount.toLocaleString('es-CL')}
-                  </div>
-                )}
-                {addonTotal > 0 && (
-                  <div className="flex justify-between text-base text-gray-400">
-                    <span>Productos tienda</span>
-                    <span className="text-sw-blue font-mono font-bold">+${addonTotal.toLocaleString('es-CL')}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Discount Block */}
-            <div className="panel-glass rounded-2xl border border-gray-800 overflow-hidden">
-              {!showDiscountPanel ? (
+            {/* Quick Actions (Add Product / Add Discount) */}
+            {!showDiscountPanel ? (
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <button
+                  onClick={() => setPosTab('tienda')}
+                  className="py-5 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-green hover:border-sw-green/40 hover:bg-sw-green/5 transition-all text-sm font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-2"
+                >
+                  <ShoppingCart size={24} /> Agregar Producto
+                </button>
                 <button
                   onClick={() => setShowDiscountPanel(true)}
-                  className="w-full py-4 flex items-center justify-center gap-2 text-gray-500 hover:text-sw-blue hover:bg-sw-blue/5 transition-all text-sm font-bold uppercase tracking-widest"
+                  className="py-5 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-blue hover:border-sw-blue/40 hover:bg-sw-blue/5 transition-all text-sm font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-2"
                 >
-                  <Plus size={17} /> Agregar Descuento
+                  <Plus size={24} /> Descuento Especial
                 </button>
-              ) : (
+              </div>
+            ) : (
+              <div className="panel-glass rounded-2xl border border-sw-blue shadow-[0_0_15px_rgba(0,168,255,0.1)] overflow-hidden">
                 <div className="p-5 space-y-3">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-sm font-bold text-white uppercase tracking-widest">Descuento Especial</span>
@@ -473,8 +471,44 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
                     {discountApplied ? '✓ Descuento Aplicado' : 'Aplicar Descuento'}
                   </button>
                 </div>
-              )}
+              </div>
+            )}
+
+            {/* Total Card — compacto */}
+            <div className="panel-glass rounded-2xl p-5 border border-gray-800">
+              <div className="text-sm font-bold uppercase tracking-[0.15em] text-gray-500 mb-1 flex items-center gap-2">
+                <Sparkles size={14} className="text-sw-yellow" /> Total Estimado
+              </div>
+              <div className="text-4xl font-black text-sw-green font-mono tracking-tight">
+                ${finalTotal.toLocaleString('es-CL')}
+              </div>
+
+              <div className="mt-3 space-y-1.5">
+                {selectedServiceObj && (
+                  <div className="flex justify-between items-center text-base text-gray-400">
+                    <span>Duración estimada</span>
+                    <span className="font-mono font-bold text-gray-200">~{selectedServiceObj.estimatedDuration || '?'} min</span>
+                  </div>
+                )}
+                {isFreeWash && (
+                  <div className="bg-sw-green/20 border border-sw-green text-sw-green text-sm font-bold px-4 py-3 rounded-xl flex items-center gap-2 animate-pulse shadow-[0_0_20px_rgba(46,204,113,0.3)]">
+                    <CheckCircle2 size={20} /> ¡LAVADO GRATIS! (Beneficio 6+1)
+                  </div>
+                )}
+                {discountApplied && (
+                  <div className="bg-sw-yellow/10 border border-sw-yellow/30 text-sw-yellow text-sm font-bold px-4 py-2 rounded-xl">
+                    Descuento: -${discountAmount.toLocaleString('es-CL')}
+                  </div>
+                )}
+                {addonTotal > 0 && (
+                  <div className="flex justify-between text-base text-gray-400">
+                    <span>Productos tienda</span>
+                    <span className="text-sw-blue font-mono font-bold">+${addonTotal.toLocaleString('es-CL')}</span>
+                  </div>
+                )}
+              </div>
             </div>
+
 
             {/* CTA */}
             <button
@@ -545,11 +579,16 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
                   <span className="text-sm font-bold uppercase tracking-widest">Seleccione productos</span>
                 </div>
               ) : expressCart.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-gray-800 mb-2 group">
-                  <span className="flex items-center gap-3 text-sm font-bold text-gray-200"><span className="text-2xl">{item.icon}</span> {item.name}</span>
+                <div key={idx} className="flex justify-between items-center bg-black/40 px-4 py-3 rounded-xl border border-gray-800 mb-2 group hover:border-gray-600 transition-all">
+                  <span className="text-sm font-bold text-gray-200">
+                    {item.name}
+                  </span>
                   <div className="flex items-center gap-3">
-                    <span className="font-mono font-black text-sw-yellow text-base">${item.price.toLocaleString('es-CL')}</span>
-                    <button onClick={() => setExpressCart(expressCart.filter((_, i) => i !== idx))} className="text-gray-700 hover:text-sw-red opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={15} /></button>
+                    <div className="text-right">
+                      <span className="font-mono font-black text-sw-yellow text-sm block">${item.price.toLocaleString('es-CL')}</span>
+                      <span className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Stock: {item.stock}</span>
+                    </div>
+                    <button onClick={() => setExpressCart(expressCart.filter((_, i) => i !== idx))} className="text-gray-600 hover:text-sw-red ml-2 transition-colors"><Trash2 size={16} /></button>
                   </div>
                 </div>
               ))}

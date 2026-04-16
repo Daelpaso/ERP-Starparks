@@ -1,241 +1,309 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { 
-  format, addMonths, subMonths, startOfMonth, endOfMonth, 
-  startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, 
-  eachDayOfInterval, isToday, parseISO
-} from 'date-fns';
-import { es } from 'date-fns/locale';
-import { 
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, 
-  Clock, Car, User, Shield, AlertCircle
+  Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, 
+  DollarSign, Bell, Receipt, Trash2, CheckCircle2, AlertCircle, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { db, collection, addDoc, deleteDoc, doc, updateDoc } from '../firebase';
 
-export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+const EVENT_TYPES = [
+  { id: 'income', label: 'Ingreso Extra', icon: DollarSign, color: 'text-sw-green', bg: 'bg-sw-green/10', border: 'border-sw-green' },
+  { id: 'expense', label: 'Gasto/Egresos', icon: Receipt, color: 'text-sw-red', bg: 'bg-sw-red/10', border: 'border-sw-red' },
+  { id: 'reminder', label: 'Recordatorio', icon: Bell, color: 'text-sw-blue', bg: 'bg-sw-blue/10', border: 'border-sw-blue' },
+  { id: 'event', label: 'Evento', icon: CalendarIcon, color: 'text-sw-yellow', bg: 'bg-sw-yellow/10', border: 'border-sw-yellow' }
+];
 
-  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
-  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+export const CalendarView = ({ events, showToast, currentUser }: any) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  // New Event Form State
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    type: 'reminder',
+    amount: 0,
+    time: '',
+    description: '',
+    isCompleted: false
+  });
 
-  const calendarDays = useMemo(() => {
-    return eachDayOfInterval({ start: startDate, end: endDate });
-  }, [startDate, endDate]);
+  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
-  const jobsByDate = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    jobs.forEach((job: any) => {
-      const dateKey = format(new Date(job.entryDate), 'yyyy-MM-dd');
-      if (!map[dateKey]) map[dateKey] = [];
-      map[dateKey].push(job);
+  const handlePrevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+  const days = [];
+  const totalDays = daysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+  const startDay = firstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
+
+  for (let i = 0; i < startDay; i++) days.push(null);
+  for (let i = 1; i <= totalDays; i++) days.push(i);
+
+  const getDayEvents = (day: number) => {
+    return events.filter((e: any) => {
+      const d = new Date(e.date);
+      return d.getDate() === day && 
+             d.getMonth() === currentDate.getMonth() && 
+             d.getFullYear() === currentDate.getFullYear();
     });
-    return map;
-  }, [jobs]);
+  };
 
-  const selectedDateJobs = useMemo(() => {
-    const dateKey = format(selectedDate, 'yyyy-MM-dd');
-    return jobsByDate[dateKey] || [];
-  }, [selectedDate, jobsByDate]);
+  const handleCreateEvent = async () => {
+    if (!newEvent.title || selectedDay === null) return;
+    try {
+      const eventDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDay);
+      await addDoc(collection(db, 'calendarEvents'), {
+        ...newEvent,
+        date: eventDate.getTime(),
+        createdAt: Date.now(),
+        createdBy: currentUser?.name || 'Sistema'
+      });
+      showToast('Evento creado', 'success');
+      setShowAddModal(false);
+      setNewEvent({ title: '', type: 'reminder', amount: 0, time: '', description: '', isCompleted: false });
+    } catch (e) {
+      showToast('Error al crear evento', 'error');
+    }
+  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDIENTE': return 'bg-sw-red';
-      case 'LAVADO': return 'bg-sw-blue';
-      case 'SECADO': return 'bg-sw-yellow';
-      case 'TERMINADO': return 'bg-sw-green';
-      case 'ENTREGADO': return 'bg-gray-600';
-      default: return 'bg-sw-blue';
+  const toggleEventStatus = async (eventId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, 'calendarEvents', eventId), { isCompleted: !currentStatus });
+    } catch (e) {
+      showToast('Error al actualizar', 'error');
+    }
+  };
+
+  const deleteEvent = async (eventId: string) => {
+    if (confirm('¿Eliminar este evento?')) {
+      try {
+        await deleteDoc(doc(db, 'calendarEvents', eventId));
+        showToast('Evento eliminado', 'success');
+      } catch (e) {
+        showToast('Error al eliminar', 'error');
+      }
     }
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-      {/* Calendar Grid */}
-      <div className="xl:col-span-2 space-y-6">
-        <div className="panel-glass p-6 rounded-2xl border border-sw-blue/20">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-sw-blue/10 rounded-xl flex items-center justify-center text-sw-blue border border-sw-blue/30">
-                <CalendarIcon size={24} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-white sw-title-font tracking-tighter uppercase">
-                  {format(currentMonth, 'MMMM yyyy', { locale: es })}
-                </h2>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Agenda de Operaciones</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={prevMonth}
-                className="p-2 rounded-lg bg-black/40 border border-gray-800 text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <button 
-                onClick={() => setCurrentMonth(new Date())}
-                className="px-4 py-2 rounded-lg bg-black/40 border border-gray-800 text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-white hover:border-white transition-all"
-              >
-                Hoy
-              </button>
-              <button 
-                onClick={nextMonth}
-                className="p-2 rounded-lg bg-black/40 border border-gray-800 text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-px bg-gray-800/50 rounded-xl overflow-hidden border border-gray-800">
-            {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
-              <div key={day} className="bg-black/60 p-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                {day}
-              </div>
-            ))}
-            {calendarDays.map((day, idx) => {
-              const dateKey = format(day, 'yyyy-MM-dd');
-              const dayJobs = jobsByDate[dateKey] || [];
-              const isCurrentMonth = isSameMonth(day, monthStart);
-              const isSelected = isSameDay(day, selectedDate);
-              const today = isToday(day);
-
-              return (
-                <div 
-                  key={idx}
-                  onClick={() => setSelectedDate(day)}
-                  className={`min-h-[100px] p-2 transition-all cursor-pointer relative group ${
-                    isCurrentMonth ? 'bg-black/40' : 'bg-black/20 opacity-30'
-                  } ${isSelected ? 'ring-2 ring-inset ring-sw-blue z-10' : 'hover:bg-white/5'}`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`text-xs font-mono font-bold ${
-                      today ? 'w-6 h-6 rounded-full bg-sw-blue text-black flex items-center justify-center' : 
-                      isSelected ? 'text-sw-blue' : 'text-gray-500'
-                    }`}>
-                      {format(day, 'd')}
-                    </span>
-                    {dayJobs.length > 0 && (
-                      <span className="text-[8px] font-bold bg-white/10 px-1.5 py-0.5 rounded text-gray-400">
-                        {dayJobs.length}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-1">
-                    {dayJobs.slice(0, 3).map((job, jIdx) => (
-                      <div 
-                        key={jIdx}
-                        className={`h-1.5 rounded-full ${getStatusColor(job.status)} opacity-60`}
-                        title={`${job.clientName} - ${job.status}`}
-                      ></div>
-                    ))}
-                    {dayJobs.length > 3 && (
-                      <div className="text-[8px] text-gray-600 font-bold text-center">
-                        +{dayJobs.length - 3} más
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+    <div className="flex flex-col gap-6 h-full min-h-[600px]">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 panel-glass p-6 rounded-xl border-t-4 border-sw-blue">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-3 sw-title-font text-sw-blue tracking-widest uppercase">
+            <CalendarIcon size={28} /> Agenda de Gestión
+          </h2>
+          <p className="text-gray-400 text-xs uppercase tracking-widest mt-1">Control de finanzas, eventos y recordatorios.</p>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4 p-4 bg-black/40 rounded-xl border border-gray-800">
-          {[
-            { label: 'Pendiente', color: 'bg-sw-red' },
-            { label: 'Lavado', color: 'bg-sw-blue' },
-            { label: 'Secado', color: 'bg-sw-yellow' },
-            { label: 'Terminado', color: 'bg-sw-green' },
-            { label: 'Entregado', color: 'bg-gray-600' }
-          ].map(item => (
-            <div key={item.label} className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{item.label}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-black/40 p-1 rounded-lg border border-gray-800">
+            <button onClick={handlePrevMonth} className="p-2 text-sw-blue hover:bg-sw-blue/10 rounded-lg transition-all"><ChevronLeft size={20} /></button>
+            <div className="px-4 text-sm font-bold uppercase tracking-[0.2em] text-white min-w-[150px] text-center">
+              {currentDate.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
             </div>
+            <button onClick={handleNextMonth} className="p-2 text-sw-blue hover:bg-sw-blue/10 rounded-lg transition-all"><ChevronRight size={20} /></button>
+          </div>
+          <button 
+            onClick={() => { setSelectedDay(new Date().getDate()); setShowAddModal(true); }}
+            className="btn-jedi flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-widest"
+          >
+            <Plus size={20} /> Nuevo Evento
+          </button>
+        </div>
+      </div>
+
+      {/* Stats / Quick Toggles */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {EVENT_TYPES.map(type => (
+          <div key={type.id} className={`panel-glass p-4 rounded-xl border border-gray-800 flex items-center gap-3`}>
+            <div className={`p-2 rounded-lg ${type.bg} ${type.color}`}><type.icon size={20} /></div>
+            <div>
+              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{type.label}</div>
+              <div className="text-sm font-bold text-white uppercase">{events.filter((e:any) => e.type === type.id).length}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="flex-1 panel-glass rounded-xl border border-gray-800 overflow-hidden flex flex-col">
+        <div className="grid grid-cols-7 bg-black/60 border-b border-gray-800">
+          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
+            <div key={d} className="p-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">{d}</div>
           ))}
         </div>
-      </div>
-
-      {/* Day Details */}
-      <div className="space-y-6">
-        <div className="panel-glass p-6 rounded-2xl border border-sw-yellow/20 sticky top-24">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-black text-white uppercase tracking-tighter">
-                {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
-              </h3>
-              <p className="text-[10px] text-sw-yellow font-bold uppercase tracking-widest">Detalle del Día</p>
-            </div>
-            <div className="w-10 h-10 bg-sw-yellow/10 rounded-lg flex items-center justify-center text-sw-yellow border border-sw-yellow/30">
-              <Clock size={20} />
-            </div>
-          </div>
-
-          <div className="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-            {selectedDateJobs.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-gray-800 rounded-xl">
-                <AlertCircle size={32} className="mx-auto text-gray-700 mb-2" />
-                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">No hay servicios programados</p>
+        
+        <div className="grid grid-cols-7 flex-1">
+          {days.map((day, idx) => {
+            const dayEvents = day ? getDayEvents(day) : [];
+            const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear();
+            
+            return (
+              <div 
+                key={idx} 
+                onClick={() => { if(day) { setSelectedDay(day); setShowAddModal(true); } }}
+                className={`min-h-[100px] border-r border-b border-gray-800 p-2 transition-all hover:bg-white/5 cursor-pointer flex flex-col gap-1 ${!day ? 'bg-black/20' : ''} ${isToday ? 'bg-sw-blue/5' : ''}`}
+              >
+                {day && (
+                  <>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className={`text-xs font-mono font-bold ${isToday ? 'bg-sw-blue text-black w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-500'}`}>
+                        {day}
+                      </span>
+                      {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-sw-blue shadow-[0_0_5px_rgba(0,168,255,1)]"></span>}
+                    </div>
+                    <div className="space-y-1 overflow-hidden">
+                      {dayEvents.slice(0, 3).map((e: any) => {
+                        const typeInfo = EVENT_TYPES.find(t => t.id === e.type) || EVENT_TYPES[0];
+                        return (
+                          <div 
+                            key={e.id} 
+                            className={`text-[8px] p-1 rounded flex items-center gap-1 font-bold uppercase tracking-tight truncate ${typeInfo.bg} ${typeInfo.color} ${e.isCompleted ? 'opacity-40 line-through' : ''}`}
+                          >
+                            <typeInfo.icon size={8} /> {e.title}
+                          </div>
+                        );
+                      })}
+                      {dayEvents.length > 3 && <div className="text-[7px] text-gray-600 text-center font-bold">+{dayEvents.length - 3} más</div>}
+                    </div>
+                  </>
+                )}
               </div>
-            ) : (
-              selectedDateJobs.map((job: any) => (
-                <motion.div 
-                  key={job.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  onClick={() => setDetailModalJobId(job.id)}
-                  className="bg-black/60 p-4 rounded-xl border border-gray-800 hover:border-sw-yellow transition-all cursor-pointer group"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${getStatusColor(job.status)} shadow-[0_0_10px_rgba(0,0,0,0.5)]`}></div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{job.status}</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-sw-yellow font-bold">{format(new Date(job.entryDate), 'HH:mm')}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center text-sw-blue">
-                      <Car size={20} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-black text-white uppercase tracking-tight">{job.plate}</div>
-                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{job.serviceName}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-800/50">
-                    <div className="flex items-center gap-2">
-                      <User size={12} className="text-gray-600" />
-                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate max-w-[100px]">{job.clientName}</span>
-                    </div>
-                    <div className="text-[10px] font-mono text-sw-green font-black">${job.total.toLocaleString('es-CL')}</div>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-
-          {selectedDateJobs.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-gray-800">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total Estimado</span>
-                <span className="text-xl font-mono font-black text-sw-green">
-                  ${selectedDateJobs.reduce((acc: number, curr: any) => acc + curr.total, 0).toLocaleString('es-CL')}
-                </span>
-              </div>
-            </div>
-          )}
+            );
+          })}
         </div>
       </div>
+
+      {/* Add/Edit Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" onClick={() => setShowAddModal(false)}>
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="panel-glass p-8 rounded-2xl max-w-2xl w-full border border-sw-blue/30 shadow-[0_0_50px_rgba(0,168,255,0.15)] flex flex-col md:flex-row gap-8"
+            >
+              {/* Left Column: Form */}
+              <div className="flex-1 space-y-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-xl font-bold text-white sw-title-font tracking-widest uppercase">Gestionar Día {selectedDay}</h3>
+                  <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-sw-red"><Plus size={24} className="rotate-45" /></button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Título / Concepto</label>
+                    <input 
+                      type="text" 
+                      value={newEvent.title}
+                      onChange={e => setNewEvent({...newEvent, title: e.target.value})}
+                      className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-blue outline-none uppercase text-sm"
+                      placeholder="Ej: Pago de Luz"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Tipo</label>
+                      <select 
+                        value={newEvent.type}
+                        onChange={e => setNewEvent({...newEvent, type: e.target.value})}
+                        className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-blue outline-none text-xs"
+                      >
+                        {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Monto (Si aplica)</label>
+                      <input 
+                        type="number" 
+                        value={newEvent.amount}
+                        onChange={e => setNewEvent({...newEvent, amount: Number(e.target.value)})}
+                        className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-blue outline-none font-mono"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Hora</label>
+                      <input 
+                        type="time" 
+                        value={newEvent.time}
+                        onChange={e => setNewEvent({...newEvent, time: e.target.value})}
+                        className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-blue outline-none"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button 
+                        onClick={handleCreateEvent}
+                        disabled={!newEvent.title}
+                        className="w-full py-3 rounded-xl bg-sw-blue text-black font-bold uppercase tracking-widest text-xs hover:scale-105 transition-all disabled:opacity-50"
+                      >
+                        Añadir Evento
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Day View */}
+              <div className="w-full md:w-80 flex flex-col gap-4 border-t md:border-t-0 md:border-l border-gray-800 pt-6 md:pt-0 md:pl-6 max-h-[400px]">
+                <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                  <Clock size={12} /> Eventos Programados
+                </h4>
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
+                  {selectedDay && getDayEvents(selectedDay).length > 0 ? getDayEvents(selectedDay).map((e: any) => {
+                    const typeInfo = EVENT_TYPES.find(t => t.id === e.type) || EVENT_TYPES[0];
+                    return (
+                      <div key={e.id} className={`p-3 rounded-xl border ${typeInfo.border} ${typeInfo.bg} flex flex-col gap-2 relative group`}>
+                        <button 
+                          onClick={() => deleteEvent(e.id)}
+                          className="absolute -top-2 -right-2 p-1 bg-sw-red text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                        
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2">
+                            <div className={`${typeInfo.color}`}><typeInfo.icon size={14} /></div>
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${e.isCompleted ? 'line-through opacity-50' : 'text-white'}`}>{e.title}</span>
+                          </div>
+                          <span className="text-[9px] font-mono text-gray-500">{e.time || '--:--'}</span>
+                        </div>
+                        
+                        {(e.type === 'income' || e.type === 'expense') && (
+                          <div className={`text-sm font-mono font-bold ${e.type === 'income' ? 'text-sw-green' : 'text-sw-red'}`}>
+                            {e.type === 'income' ? '+' : '-'}${e.amount?.toLocaleString('es-CL')}
+                          </div>
+                        )}
+
+                        <button 
+                          onClick={() => toggleEventStatus(e.id, e.isCompleted)}
+                          className={`w-full py-1 rounded text-[8px] font-bold uppercase tracking-widest flex items-center justify-center gap-1 transition-all ${e.isCompleted ? 'bg-sw-green text-black' : 'bg-black/30 text-gray-500 hover:text-white'}`}
+                        >
+                          {e.isCompleted ? <><CheckCircle2 size={10} /> Completado</> : 'Marcar Completado'}
+                        </button>
+                      </div>
+                    );
+                  }) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-gray-800 rounded-xl">
+                      <AlertCircle size={32} className="text-gray-700 mb-2" />
+                      <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">No hay eventos para este día.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

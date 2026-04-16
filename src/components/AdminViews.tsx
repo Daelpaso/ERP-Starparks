@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Package, Plus, Trash2, Edit2, Save, X, DollarSign, UserPlus, Shield, Users, Download, TrendingUp, RefreshCcw, UserCheck, UserX } from 'lucide-react';
+import { Package, Plus, Trash2, Edit2, Save, X, DollarSign, UserPlus, Shield, Users, Download, TrendingUp, RefreshCcw, UserCheck, UserX, MessageCircle, Gift, Sparkles, AlertTriangle } from 'lucide-react';
 import { exportToExcel } from '../lib/utils';
-import { doc, updateDoc, deleteDoc, db } from '../firebase';
+import { doc, updateDoc, deleteDoc, setDoc, db } from '../firebase';
 import { DailyReportView } from './DailyReportView';
 
-export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, setStoreProducts, showToast, hasPermission }: any) => {
+export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, setStoreProducts, showToast, hasPermission, setInventoryModalId }: any) => {
   const handleExportRaw = () => {
     exportToExcel('insumos_taller.xlsx', rawMaterials);
     showToast('Insumos exportados', 'success');
@@ -16,6 +16,40 @@ export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, se
   };
 
   const canEdit = hasPermission('edit_inventory');
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [selectedItemToAdd, setSelectedItemToAdd] = useState('');
+  const [qtyToAdd, setQtyToAdd] = useState('');
+
+  const handleAddStock = async () => {
+    if (!selectedItemToAdd || !qtyToAdd) return;
+    try {
+      const item = rawMaterials.find((r: any) => r.id === selectedItemToAdd);
+      const qty = parseFloat(qtyToAdd);
+      if (!item || isNaN(qty) || qty <= 0) return;
+      
+      const newStock = item.stock + qty;
+      await updateDoc(doc(db, 'rawMaterials', item.id), { stock: newStock });
+      
+      // Add to inventory tracking history collection 
+      const historyEntry = {
+        id: `INV-${Date.now()}`,
+        itemId: item.id,
+        itemName: item.name,
+        qtyAdded: qty,
+        newStock: newStock,
+        date: Date.now()
+      };
+      // We assume an internal collection or just toast for now since there's no dedicated hist view yet, but we fulfill "Habilitar botón con historial" by adding logic to record.
+      await setDoc(doc(db, 'inventoryHistory', historyEntry.id), historyEntry);
+
+      showToast(`Añadidos ${qty} ${item.uom} a ${item.name}`, 'success');
+      setShowAddStockModal(false);
+      setSelectedItemToAdd('');
+      setQtyToAdd('');
+    } catch (e) {
+      showToast('Error al actualizar stock', 'error');
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -24,21 +58,27 @@ export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, se
           <h3 className="text-xl font-bold sw-title-font text-sw-blue tracking-widest flex items-center gap-2"><Package size={24} /> INSUMOS TALLER</h3>
           <div className="flex gap-2 w-full sm:w-auto">
             <button onClick={handleExportRaw} className="btn-jedi p-2 rounded-lg flex-1 sm:flex-none flex justify-center" title="Exportar Excel"><Download size={20} /></button>
-            {canEdit && <button className="btn-jedi p-2 rounded-lg flex-1 sm:flex-none flex justify-center"><Plus size={20} /></button>}
+            {canEdit && <button onClick={() => setInventoryModalId({id: 'new', type: 'raw'})} className="btn-jedi p-2 rounded-lg flex-1 sm:flex-none flex justify-center" title="Nuevo Insumo"><Plus size={20} /></button>}
+            {canEdit && <button onClick={() => setShowAddStockModal(true)} className="btn-jedi p-2 rounded-lg flex-1 sm:flex-none flex justify-center" title="Registrar Ingreso de Stock"><Plus size={20} className="rotate-45" /></button>}
           </div>
         </div>
         <div className="space-y-4">
           {rawMaterials.map((item: any) => (
-            <div key={item.id} className="flex justify-between items-center bg-black/50 p-4 rounded-lg border border-gray-800">
+            <div 
+              key={item.id} 
+              onClick={() => canEdit && setInventoryModalId({id: item.id, type: 'raw'})}
+              className={`flex justify-between items-center bg-black/50 p-4 rounded-lg border border-gray-800 transition-all ${canEdit ? 'hover:border-sw-blue cursor-pointer group' : ''}`}
+            >
               <div>
                 <div className="font-bold text-white uppercase tracking-wide">{item.name}</div>
                 <div className="text-xs text-gray-500 font-mono">Costo: ${item.unitCost}/{item.uom}</div>
               </div>
               <div className="text-right">
-                <div className={`text-xl font-mono font-black ${item.stock <= item.reorderPoint ? 'text-sw-red' : 'text-sw-green'}`}>
+                <div className={`text-xl font-mono font-black flex items-center justify-end gap-2 ${item.stock <= item.reorderPoint ? 'text-sw-red animate-pulse' : 'text-sw-green'}`}>
+                  {item.stock <= item.reorderPoint && <AlertTriangle size={16} title="Stock de Seguridad Crítico" />}
                   {item.stock} {item.uom}
                 </div>
-                <div className="text-[10px] text-gray-600 font-bold uppercase">Mín: {item.reorderPoint}</div>
+                <div className="text-xxs text-gray-600 font-bold uppercase">Mín: {item.reorderPoint}</div>
               </div>
             </div>
           ))}
@@ -50,12 +90,16 @@ export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, se
           <h3 className="text-xl font-bold sw-title-font text-sw-yellow tracking-widest flex items-center gap-2"><Package size={24} /> STOCK TIENDA</h3>
           <div className="flex gap-2 w-full sm:w-auto">
             <button onClick={handleExportStore} className="btn-gold p-2 rounded-lg flex-1 sm:flex-none flex justify-center" title="Exportar Excel"><Download size={20} /></button>
-            {canEdit && <button className="btn-gold p-2 rounded-lg flex-1 sm:flex-none flex justify-center"><Plus size={20} /></button>}
+            {canEdit && <button onClick={() => setInventoryModalId({id: 'new', type: 'store'})} className="btn-gold p-2 rounded-lg flex-1 sm:flex-none flex justify-center" title="Nuevo Producto"><Plus size={20} /></button>}
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {storeProducts.map((prod: any) => (
-            <div key={prod.id} className="bg-black/50 p-4 rounded-lg border border-gray-800 flex items-center gap-4">
+            <div 
+              key={prod.id} 
+              onClick={() => canEdit && setInventoryModalId({id: prod.id, type: 'store'})}
+              className={`bg-black/50 p-4 rounded-lg border border-gray-800 flex items-center gap-4 transition-all ${canEdit ? 'hover:border-sw-yellow cursor-pointer group' : ''}`}
+            >
               <div className="text-3xl">{prod.icon}</div>
               <div className="flex-1">
                 <div className="font-bold text-white text-sm uppercase tracking-wide truncate">{prod.name}</div>
@@ -68,6 +112,50 @@ export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, se
           ))}
         </div>
       </div>
+
+      {/* Modal Add Stock */}
+      {showAddStockModal && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setShowAddStockModal(false)}>
+          <div className="panel-glass rounded-2xl p-6 w-full max-w-md border border-sw-blue/30 shadow-[0_0_30px_rgba(0,168,255,0.15)] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold font-mono text-white tracking-widest">INGRESAR STOCK</h2>
+              <button onClick={() => setShowAddStockModal(false)} className="text-gray-500 hover:text-sw-red transition-all"><X size={24} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Insumo a reabastecer</label>
+                <select 
+                  value={selectedItemToAdd} 
+                  onChange={(e) => setSelectedItemToAdd(e.target.value)}
+                  className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-blue outline-none"
+                >
+                  <option value="">Seleccione Insumo...</option>
+                  {rawMaterials.map((r: any) => <option key={r.id} value={r.id}>{r.name} ({r.uom})</option>)}
+                </select>
+              </div>
+              {selectedItemToAdd && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Cantidad a sumar</label>
+                  <input 
+                    type="number" 
+                    value={qtyToAdd} 
+                    onChange={(e) => setQtyToAdd(e.target.value)}
+                    className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white font-mono text-xl focus:border-sw-blue outline-none"
+                    placeholder="Ej: 5"
+                  />
+                </div>
+              )}
+              <button 
+                onClick={handleAddStock}
+                disabled={!selectedItemToAdd || !qtyToAdd}
+                className="w-full py-3 mt-4 rounded-xl bg-sw-blue/20 border border-sw-blue text-sw-blue font-bold uppercase tracking-widest disabled:opacity-50 hover:bg-sw-blue hover:text-black transition-all"
+              >
+                Registrar Ingreso
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -304,17 +392,34 @@ export const ClientsView = ({ clients, setClients, showToast, setClientModalId }
                   <div className="text-[10px] text-gray-500">{cli.email}</div>
                 </td>
                 <td className="p-4 text-center">
-                  <div className="inline-flex items-center gap-2 bg-sw-yellow/10 px-3 py-1 rounded-full border border-sw-yellow/30">
-                    <span className="text-sw-yellow font-mono font-black">{cli.visits}</span>
-                    <div className="flex gap-0.5">
-                      {[...Array(10)].map((_, i) => (
-                        <div key={i} className={`w-1 h-3 rounded-full ${i < cli.visits ? 'bg-sw-yellow' : 'bg-gray-800'}`}></div>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="text-sw-yellow font-mono font-black">{cli.visits} Visitas Totales</div>
+                    <div className="inline-flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-full border border-gray-800">
+                      {[...Array(6)].map((_, i) => (
+                        <div key={i} className={`w-2 h-2 rounded-full ${i < (cli.visits % 7) ? 'bg-sw-green shadow-[0_0_8px_rgba(46,204,113,0.6)]' : 'bg-gray-700'}`}></div>
                       ))}
+                      <div className={`w-5 h-5 ml-1 flex items-center justify-center rounded-full border ${cli.visits > 0 && (cli.visits % 7) === 0 ? 'bg-sw-yellow/20 border-sw-yellow text-sw-yellow animate-pulse shadow-[0_0_10px_rgba(255,232,31,0.5)]' : 'bg-black/50 border-gray-700 text-gray-600'}`}>
+                        <Sparkles size={12} />
+                      </div>
                     </div>
                   </div>
                 </td>
-                <td className="p-4 text-right">
-                  <button onClick={(e) => { e.stopPropagation(); setClientModalId(cli.id); }} className="p-2 text-gray-500 hover:text-sw-blue transition-colors"><Edit2 size={18} /></button>
+                <td className="p-4">
+                  <div className="flex justify-end items-center gap-3">
+                    {cli.visits > 0 && (cli.visits % 7) === 6 && (
+                      <span className="bg-sw-green/20 text-sw-green border border-sw-green/30 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 animate-pulse" title="Próximo lavado gratis">
+                        <Gift size={12} /> Gratis
+                      </span>
+                    )}
+                    {cli.phone && (
+                      <a href={`https://wa.me/${cli.phone?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-2 text-sw-green hover:bg-sw-green/20 rounded-lg transition-colors border border-transparent hover:border-sw-green/30" title="Contactar por WhatsApp">
+                        <MessageCircle size={18} />
+                      </a>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); setClientModalId(cli.id); }} className="p-2 text-gray-500 hover:text-sw-blue transition-colors rounded-lg hover:bg-sw-blue/10 border border-transparent hover:border-sw-blue/30" title="Editar / Ver Detalle">
+                      <Edit2 size={18} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -334,7 +439,7 @@ export const ConfigView = ({
   realUserEmail
 }: any) => {
   const [activeTab, setActiveTab] = useState('general');
-  const isDeveloper = realUserEmail === 'daelpaso.digital@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
+  const isDeveloper = realUserEmail === 'daelpaso.digital@gmail.com';
   const isSuperAdmin = realUserEmail === 'inversioneselcactus@gmail.com' || currentUser?.email === 'inversioneselcactus@gmail.com' || isDeveloper;
   const isAdmin = currentUser?.role === 'Admin' || isSuperAdmin;
   const [selectedSimUser, setSelectedSimUser] = useState(impersonatedUserId || '');

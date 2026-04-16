@@ -40,8 +40,15 @@ const CHILEAN_DENOMINATIONS = [
 
 export const OpenShiftModal = ({ currentUser, onClose, showToast, handleLogout }: any) => {
   const [initialCash, setInitialCash] = useState('');
+  const [operatorName, setOperatorName] = useState('');
+
+  const OPERATORS = ['Javier Ancilia', 'Marcelo Gallardo', 'Ignacio Álvarez', 'Daniel Inostroza'];
 
   const handleOpen = async () => {
+    if (!operatorName) {
+      showToast('Seleccione un operador', 'error');
+      return;
+    }
     const amount = parseInt(initialCash, 10);
     if (isNaN(amount) || amount < 0) {
       showToast('Ingrese un monto válido', 'error');
@@ -54,6 +61,7 @@ export const OpenShiftModal = ({ currentUser, onClose, showToast, handleLogout }
         openedAt: Date.now(),
         closedAt: null,
         openedBy: currentUser.email || currentUser.id,
+        operatorName: operatorName,
         status: 'open',
         initialCash: amount,
         declaredCash: null,
@@ -94,7 +102,18 @@ export const OpenShiftModal = ({ currentUser, onClose, showToast, handleLogout }
         <div className="p-6 space-y-6">
           <p className="text-sm text-gray-400">Debe aperturar la caja para iniciar sus operaciones.</p>
           <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Fondo de Caja Inicial (Sencillo)</label>
+            <label className="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Operador del Turno</label>
+            <select
+              value={operatorName}
+              onChange={(e) => setOperatorName(e.target.value)}
+              className="w-full bg-black/50 border border-gray-800 rounded-xl py-3 px-4 text-white font-bold text-base focus:border-sw-green focus:ring-1 focus:ring-sw-green outline-none"
+            >
+              <option value="">Seleccione operador...</option>
+              {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Fondo de Caja Inicial (Sencillo)</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono">$</span>
               <input 
@@ -107,11 +126,11 @@ export const OpenShiftModal = ({ currentUser, onClose, showToast, handleLogout }
             </div>
           </div>
           <div className="space-y-3">
-            <button onClick={handleOpen} className="w-full btn-yoda py-3 rounded-xl font-bold uppercase tracking-widest flex justify-center items-center gap-2">
+            <button onClick={handleOpen} disabled={!operatorName} className="w-full btn-yoda py-3 rounded-xl font-bold uppercase tracking-widest flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               <CheckCircle2 size={20} /> Iniciar Turno
             </button>
             {handleLogout && (
-              <button onClick={handleLogout} className="w-full py-3 rounded-xl border border-gray-800 text-gray-500 hover:text-white hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-xs flex justify-center items-center gap-2">
+              <button onClick={handleLogout} className="w-full py-3 rounded-xl border border-gray-800 text-gray-500 hover:text-white hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-sm flex justify-center items-center gap-2">
                 <LogOut size={16} /> Cerrar Sesión
               </button>
             )}
@@ -234,6 +253,8 @@ export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any)
   const creditTotal = useMemo(() => {
     return shiftJobs.filter((j: any) => j.paymentMethod === 'Crédito').reduce((acc: number, j: any) => acc + (j.total || 0), 0);
   }, [shiftJobs]);
+
+  const isFormComplete = declaredCash !== '' && declaredCards !== '' && declaredTransfers !== '' && declaredCredit !== '';
 
   const handleCloseShift = async () => {
     try {
@@ -364,14 +385,6 @@ export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any)
             
             <div className="p-8 space-y-8">
               <div className="space-y-6">
-                <div className="bg-sw-blue/5 p-6 rounded-2xl border border-sw-blue/20 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <ShieldAlert className="text-sw-blue" size={24} />
-                    <span className="text-sm font-bold text-sw-blue uppercase tracking-widest">Ventas a Crédito (Sistema)</span>
-                  </div>
-                  <span className="text-2xl font-mono font-black text-white">${creditTotal.toLocaleString('es-CL')}</span>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="panel-glass p-6 rounded-2xl border border-gray-800 space-y-4">
                     <div className="flex items-center gap-3 text-sw-green">
@@ -437,7 +450,7 @@ export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any)
                         value={declaredCredit}
                         onChange={(e) => setDeclaredCredit(e.target.value)}
                         className="w-full bg-black border-2 border-gray-800 focus:border-sw-red rounded-xl py-5 pl-12 pr-6 text-3xl font-mono font-black text-white outline-none transition-all"
-                        placeholder={creditTotal.toString()}
+                        placeholder="0"
                       />
                     </div>
                   </div>
@@ -457,7 +470,11 @@ export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any)
                   </div>
                 </div>
 
-                <button onClick={handleCloseShift} className="w-full btn-sith py-6 rounded-2xl font-black uppercase text-lg tracking-widest flex justify-center items-center gap-4 shadow-[0_0_30px_rgba(231,76,60,0.3)] transition-all hover:scale-[1.02] active:scale-95">
+                <button 
+                  onClick={handleCloseShift} 
+                  disabled={!isFormComplete} 
+                  className="w-full btn-sith py-6 rounded-2xl font-black uppercase text-lg tracking-widest flex justify-center items-center gap-4 shadow-[0_0_30px_rgba(231,76,60,0.3)] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:scale-100"
+                >
                   <LogOut size={28} /> DECLARAR Y CERRAR TURNO
                 </button>
               </div>
@@ -711,6 +728,7 @@ const DEFAULT_SHIFT_COLUMNS = [
 
 export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, currentUser, showToast }: any) => {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [shiftTab, setShiftTab] = useState<'recientes' | 'archivados'>('recientes');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [columns, setColumns] = useState(() => {
@@ -767,19 +785,41 @@ export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, cu
   };
 
   const filteredShifts = useMemo(() => {
-    return shifts
+    let result = shifts
       .filter((s: any) => {
+        const isArchived = s.status === 'archived';
+        if (shiftTab === 'recientes' && isArchived) return false;
+        if (shiftTab === 'archivados' && !isArchived) return false;
+
         const matchesSearch = s.openedBy.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDate = filterDate ? new Date(s.openedAt).toISOString().split('T')[0] === filterDate : true;
-        // Don't show archived shifts by default in the main history unless searched? 
-        // Or just show them with a different style. Let's show them but allow filtering.
         return matchesSearch && matchesDate;
       })
       .sort((a: any, b: any) => b.openedAt - a.openedAt);
-  }, [shifts, searchTerm, filterDate]);
+
+      if (shiftTab === 'recientes') {
+        result = result.slice(0, 100);
+      }
+      return result;
+  }, [shifts, searchTerm, filterDate, shiftTab]);
 
   return (
     <div className="space-y-6">
+      <div className="flex gap-4 border-b border-gray-800 pb-2">
+        <button 
+          onClick={() => setShiftTab('recientes')}
+          className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all rounded-lg ${shiftTab === 'recientes' ? 'bg-sw-yellow/20 text-sw-yellow' : 'text-gray-500 hover:text-white'}`}
+        >
+          Recientes (Max 100)
+        </button>
+        <button 
+          onClick={() => setShiftTab('archivados')}
+          className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all rounded-lg ${shiftTab === 'archivados' ? 'bg-sw-blue/20 text-sw-blue' : 'text-gray-500 hover:text-white'}`}
+        >
+          Archivados
+        </button>
+      </div>
+
       <div className="panel-glass p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">

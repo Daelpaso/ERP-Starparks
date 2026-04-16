@@ -199,3 +199,97 @@ export const exportToPDF = (title: string, headers: string[], rows: any[][], sum
 
   doc.save(`${title.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
 };
+
+export const generateDeliveryVoucher = (job: any) => {
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: [80, 200] // Thermal printer format
+  });
+
+  const width = 80;
+  let y = 10;
+
+  // Company Header
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('STARPARKS', width / 2, y, { align: 'center' });
+  y += 5;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('CARWASH PRO & PARKING', width / 2, y, { align: 'center' });
+  y += 4;
+  doc.text('Voucher de Entrega', width / 2, y, { align: 'center' });
+  y += 6;
+
+  doc.setLineWidth(0.2);
+  doc.line(5, y, 75, y);
+  y += 6;
+
+  // Vehicle Info
+  doc.setFont('helvetica', 'bold');
+  doc.text('VEHÍCULO:', 5, y);
+  y += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(14);
+  doc.text(job.plate, 5, y);
+  y += 6;
+  doc.setFontSize(9);
+  doc.text(`${job.vehicleModel || ''} ${job.vehicleColor || ''}`, 5, y);
+  y += 8;
+
+  // Service Info
+  doc.setFont('helvetica', 'bold');
+  doc.text('DETALLE DEL SERVICIO:', 5, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.text(job.serviceName || 'Lavado', 5, y);
+  doc.text(`$${job.serviceTotal?.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
+  y += 5;
+
+  if (job.storeTotal > 0) {
+    doc.text('Consumos Tienda', 5, y);
+    doc.text(`$${job.storeTotal.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
+    y += 5;
+  }
+
+  if (job.parkingFee > 0) {
+    doc.text(`Multa Parking (${job.parkingMins} min)`, 5, y);
+    doc.text(`$${job.parkingFee.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
+    y += 5;
+  }
+
+  if (job.discount > 0) {
+    doc.text('Descuento', 5, y);
+    doc.text(`-$${job.discount.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
+    y += 5;
+  }
+
+  y += 3;
+  doc.line(5, y, 75, y);
+  y += 6;
+
+  // Total
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL:', 5, y);
+  doc.text(`$${job.total?.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
+  y += 8;
+
+  // Footer / Metadata
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Ingreso: ${new Date(job.entryDate).toLocaleString('es-CL')}`, 5, y);
+  y += 4;
+  doc.text(`Entrega: ${new Date(job.exitDate || Date.now()).toLocaleString('es-CL')}`, 5, y);
+  y += 4;
+  doc.text(`Pago: ${job.paymentMethod || 'N/A'} - ${job.docType || 'N/A'}`, 5, y);
+  y += 8;
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('¡GRACIAS POR SU PREFERENCIA!', width / 2, y, { align: 'center' });
+  y += 4;
+  doc.text('www.starparkschile.cl', width / 2, y, { align: 'center' });
+
+  doc.save(`voucher_${job.plate}_${Date.now()}.pdf`);
+};
+

@@ -2,13 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { Calendar, Download, TrendingUp, DollarSign, ShoppingCart, Car, Clock, History, LayoutGrid, List, Search, Filter } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../lib/utils';
 import { ShiftHistoryView } from './ShiftManagement';
+import { PricingView } from './AdminViews';
 
-export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, initialSubTab, currentUser, showToast }: any) => {
+export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, initialSubTab, currentUser, showToast, services, storeProducts, categories, setServices, setStoreProducts, hasPermission, setServiceModalId, setCategoryModalId }: any) => {
   const [dateRange, setDateRange] = useState({
     start: new Date().toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
-  const [activeSubTab, setActiveSubTab] = useState<'ventas' | 'turnos'>(initialSubTab || 'ventas');
+  const [activeSubTab, setActiveSubTab] = useState<'ventas' | 'turnos' | 'tarifas' | 'productividad'>(initialSubTab || 'ventas');
 
   // Update activeSubTab when initialSubTab changes
   React.useEffect(() => {
@@ -31,6 +32,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
       acc.lavado += j.serviceTotal || 0;
       acc.tienda += j.storeTotal || 0;
       acc.parking += j.parkingFee || 0;
+      acc.descuento += j.discountAmount || 0;
       acc.credito += j.paymentMethod === 'Crédito' ? (j.total || 0) : 0;
       
       if (j.paymentMethod === 'Efectivo') acc.efectivo += j.total || 0;
@@ -38,7 +40,15 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
       else if (j.paymentMethod === 'Transferencia') acc.transferencia += j.total || 0;
       
       return acc;
-    }, { total: 0, lavado: 0, tienda: 0, parking: 0, efectivo: 0, tarjeta: 0, transferencia: 0, credito: 0 });
+    }, { total: 0, lavado: 0, tienda: 0, parking: 0, efectivo: 0, tarjeta: 0, transferencia: 0, credito: 0, descuento: 0 });
+
+    const workerStats = deliveredJobs.reduce((acc: any, j: any) => {
+      const workerId = j.timeline?.find((t: any) => t.status === 'Listo')?.workerId || 'Sin Asignar';
+      if (!acc[workerId]) acc[workerId] = { count: 0, total: 0 };
+      acc[workerId].count += 1;
+      acc[workerId].total += j.serviceTotal || 0;
+      return acc;
+    }, {});
 
     const dayTxs = transactions.filter((t: any) => t.timestamp >= start.getTime() && t.timestamp <= end.getTime());
     const cashFlow = dayTxs.reduce((acc: any, t: any) => {
@@ -53,6 +63,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
       deliveredCount: deliveredJobs.length,
       revenue,
       cashFlow,
+      workerStats,
       jobs: filteredJobs
     };
   }, [dateRange, jobs, transactions]);
@@ -76,6 +87,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
       { Concepto: 'Ingresos Lavado', Valor: reportData.revenue.lavado },
       { Concepto: 'Ingresos Tienda', Valor: reportData.revenue.tienda },
       { Concepto: 'Ingresos Estacionamiento', Valor: reportData.revenue.parking },
+      { Concepto: 'Total Descuentos Aplicados', Valor: reportData.revenue.descuento },
       { Concepto: 'Pago Efectivo', Valor: reportData.revenue.efectivo },
       { Concepto: 'Pago Tarjeta', Valor: reportData.revenue.tarjeta },
       { Concepto: 'Pago Transferencia', Valor: reportData.revenue.transferencia },
@@ -109,18 +121,30 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
   return (
     <div className="space-y-6">
       {!initialSubTab && (
-        <div className="flex border-b border-gray-800">
+        <div className="flex border-b border-gray-800 overflow-x-auto custom-scrollbar">
           <button 
             onClick={() => setActiveSubTab('ventas')}
-            className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all ${activeSubTab === 'ventas' ? 'text-sw-blue border-b-2 border-sw-blue bg-sw-blue/5' : 'text-gray-500 hover:text-gray-300'}`}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'ventas' ? 'text-sw-blue border-b-2 border-sw-blue bg-sw-blue/5' : 'text-gray-500 hover:text-gray-300'}`}
           >
             Ventas y Finanzas
           </button>
           <button 
             onClick={() => setActiveSubTab('turnos')}
-            className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all ${activeSubTab === 'turnos' ? 'text-sw-yellow border-b-2 border-sw-yellow bg-sw-yellow/5' : 'text-gray-500 hover:text-gray-300'}`}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'turnos' ? 'text-sw-yellow border-b-2 border-sw-yellow bg-sw-yellow/5' : 'text-gray-500 hover:text-gray-300'}`}
           >
-            Historial de Turnos
+            Turnos
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('productividad')}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'productividad' ? 'text-sw-green border-b-2 border-sw-green bg-sw-green/5' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            Productividad
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('tarifas')}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'tarifas' ? 'text-gray-300 border-b-2 border-white bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            Configuración
           </button>
         </div>
       )}
@@ -132,7 +156,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
               <h2 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                 <TrendingUp className="text-sw-blue" /> Análisis de Operaciones
               </h2>
-              <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">Filtro por rango de fechas.</p>
+              <p className="text-gray-500 text-sm font-medium uppercase tracking-widest mt-1">Filtro por rango de fechas.</p>
             </div>
             
             <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
@@ -142,7 +166,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
                     const today = new Date().toISOString().split('T')[0];
                     setDateRange({ start: today, end: today });
                   }}
-                  className="px-3 py-1 rounded-lg bg-black/40 border border-gray-800 text-[10px] font-bold uppercase text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
+                  className="px-3 py-1 rounded-lg bg-black/40 border border-gray-800 text-xs font-ui font-bold uppercase text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
                 >
                   Hoy
                 </button>
@@ -153,7 +177,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
                     const yStr = yesterday.toISOString().split('T')[0];
                     setDateRange({ start: yStr, end: yStr });
                   }}
-                  className="px-3 py-1 rounded-lg bg-black/40 border border-gray-800 text-[10px] font-bold uppercase text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
+                  className="px-3 py-1 rounded-lg bg-black/40 border border-gray-800 text-xs font-ui font-bold uppercase text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
                 >
                   Ayer
                 </button>
@@ -196,24 +220,24 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="panel-glass p-6 rounded-2xl border border-gray-800 flex flex-col gap-2">
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2"><Car size={12} /> Vehículos</div>
+              <div className="text-xs font-bold text-gray-400 font-ui uppercase tracking-widest flex items-center gap-2"><Car size={16} /> Vehículos</div>
               <div className="text-3xl font-mono font-black text-white">{reportData.jobsCount}</div>
-              <div className="text-[10px] text-gray-400">{reportData.deliveredCount} Entregados</div>
+              <div className="text-xxs text-gray-500 uppercase tracking-wider">{reportData.deliveredCount} Entregados</div>
             </div>
             <div className="panel-glass p-6 rounded-2xl border border-gray-800 flex flex-col gap-2">
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2"><DollarSign size={12} /> Recaudación</div>
+              <div className="text-xs font-bold text-gray-400 font-ui uppercase tracking-widest flex items-center gap-2"><DollarSign size={16} /> Recaudación</div>
               <div className="text-3xl font-mono font-black text-sw-green">${reportData.revenue.total.toLocaleString('es-CL')}</div>
-              <div className="text-[10px] text-gray-400">Ventas del periodo</div>
+              <div className="text-xxs text-gray-500 uppercase tracking-wider">Neto (Bruto: ${(reportData.revenue.total + reportData.revenue.descuento).toLocaleString('es-CL')})</div>
             </div>
             <div className="panel-glass p-6 rounded-2xl border border-gray-800 flex flex-col gap-2">
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2"><ShoppingCart size={12} /> Tienda</div>
+              <div className="text-xs font-bold text-gray-400 font-ui uppercase tracking-widest flex items-center gap-2"><ShoppingCart size={16} /> Tienda</div>
               <div className="text-3xl font-mono font-black text-sw-yellow">${reportData.revenue.tienda.toLocaleString('es-CL')}</div>
-              <div className="text-[10px] text-gray-400">Ventas exprés</div>
+              <div className="text-xxs text-gray-500 uppercase tracking-wider">Consumos registrados</div>
             </div>
             <div className="panel-glass p-6 rounded-2xl border border-gray-800 flex flex-col gap-2">
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2"><Clock size={12} /> Parking</div>
+              <div className="text-xs font-bold text-gray-400 font-ui uppercase tracking-widest flex items-center gap-2"><Clock size={16} /> Parking</div>
               <div className="text-3xl font-mono font-black text-sw-blue">${reportData.revenue.parking.toLocaleString('es-CL')}</div>
-              <div className="text-[10px] text-gray-400">Cargos por tiempo</div>
+              <div className="text-xxs text-gray-500 uppercase tracking-wider">Multas por sobretiempo</div>
             </div>
           </div>
 
@@ -244,15 +268,15 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
               <h3 className="text-xs font-bold text-white uppercase tracking-widest mb-4 border-b border-gray-800 pb-2">Flujo de Caja (Movimientos)</h3>
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Ingresos Extra</span>
+                  <span className="text-sm text-gray-400">Ingresos Registrados</span>
                   <span className="font-mono font-bold text-sw-green">+${reportData.cashFlow.income.toLocaleString('es-CL')}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Egresos / Retiros</span>
+                  <span className="text-sm text-gray-400">Gastos / Retiros</span>
                   <span className="font-mono font-bold text-sw-red">-${reportData.cashFlow.expense.toLocaleString('es-CL')}</span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-gray-800">
-                  <span className="text-sm font-bold text-white">Balance Neto</span>
+                  <span className="text-sm font-bold text-white">Balance de Caja</span>
                   <span className={`font-mono font-bold ${reportData.cashFlow.income - reportData.cashFlow.expense >= 0 ? 'text-sw-green' : 'text-sw-red'}`}>
                     ${(reportData.cashFlow.income - reportData.cashFlow.expense).toLocaleString('es-CL')}
                   </span>
@@ -261,7 +285,7 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
             </div>
           </div>
         </>
-      ) : (
+      ) : activeSubTab === 'turnos' ? (
         <ShiftHistoryView 
           shifts={shifts} 
           jobs={jobs} 
@@ -270,7 +294,41 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
           currentUser={currentUser}
           showToast={showToast}
         />
+      ) : activeSubTab === 'productividad' ? (
+        <div className="panel-glass p-6 rounded-2xl border border-gray-800">
+          <h3 className="text-xl font-bold text-sw-green uppercase tracking-widest mb-6 flex items-center gap-2">
+            <TrendingUp size={24} /> Desempeño por Trabajador
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Object.entries(reportData.workerStats).map(([workerId, stats]: [any, any]) => (
+              <div key={workerId} className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                <div className="text-sm font-bold text-white uppercase mb-4 border-b border-gray-800 pb-2">{workerId}</div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-gray-500 uppercase">Lavados</span>
+                  <span className="text-lg font-mono font-black text-sw-blue">{stats.count}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500 uppercase">Producción</span>
+                  <span className="text-lg font-mono font-black text-sw-green">${stats.total.toLocaleString('es-CL')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <PricingView 
+          services={services} 
+          setServices={setServices} 
+          storeProducts={storeProducts} 
+          setStoreProducts={setStoreProducts} 
+          categories={categories}
+          showToast={showToast} 
+          hasPermission={hasPermission} 
+          setServiceModalId={setServiceModalId}
+          setCategoryModalId={setCategoryModalId}
+        />
       )}
     </div>
   );
 };
+

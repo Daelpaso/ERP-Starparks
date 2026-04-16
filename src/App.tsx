@@ -21,7 +21,7 @@ import { POSView } from './components/POSView';
 import { CalendarView } from './components/CalendarView';
 import { AuthGuard } from './components/AuthGuard';
 import { PricingView, ConfigView, UsersView, ClientsView, InventoryView } from './components/AdminViews';
-import { JobDetailModal, QuickStoreModal, CheckoutModal, ClientDetailModal, ServiceModal, CategoryModal, UserDetailModal, UserCreateModal } from './components/Modals';
+import { JobDetailModal, QuickStoreModal, CheckoutModal, ClientDetailModal, ServiceModal, CategoryModal, UserDetailModal, UserCreateModal, InventoryItemModal } from './components/Modals';
 import { OpenShiftModal, CashMovementModal, CloseShiftModal, ZReportModal, ShiftHistoryView } from './components/ShiftManagement';
 
 // Firebase Imports
@@ -44,7 +44,7 @@ const SystemClock = () => {
       <div className="text-xl font-black text-sw-blue tracking-tighter leading-none">
         {time.toLocaleTimeString('es-CL', { hour12: false })}
       </div>
-      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+      <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">
         {time.toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' })}
       </div>
     </div>
@@ -96,21 +96,21 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
               <div className="p-4 space-y-6">
                 {/* Visual Modes */}
                 <div className="space-y-3">
-                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Modos Visuales</p>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Modos Visuales</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => setA11y({...a11y, darkMode: !a11y.darkMode})}
                       className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${a11y.darkMode ? 'bg-sw-yellow/10 border-sw-yellow text-sw-yellow' : 'bg-white/5 border-gray-800 text-gray-400'}`}
                     >
                       {a11y.darkMode ? <Moon size={18} /> : <Sun size={18} />}
-                      <span className="text-[10px] font-bold uppercase tracking-tighter">{a11y.darkMode ? 'Modo Oscuro' : 'Modo Claro'}</span>
+                      <span className="text-xs font-bold uppercase tracking-tighter">{a11y.darkMode ? 'Modo Oscuro' : 'Modo Claro'}</span>
                     </button>
                     <button 
                       onClick={() => setA11y({...a11y, highContrast: !a11y.highContrast})}
                       className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${a11y.highContrast ? 'bg-sw-blue/10 border-sw-blue text-sw-blue' : 'bg-white/5 border-gray-800 text-gray-400'}`}
                     >
                       <Zap size={18} />
-                      <span className="text-[10px] font-bold uppercase tracking-tighter">Alto Contraste</span>
+                      <span className="text-xs font-bold uppercase tracking-tighter">Alto Contraste</span>
                     </button>
                   </div>
                 </div>
@@ -121,7 +121,7 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Tamaño de Texto</p>
                     <button 
                       onClick={() => setA11y({...a11y, fontSize: 'medium'})}
-                      className="text-[8px] font-bold text-sw-blue uppercase tracking-widest hover:underline"
+                      className="text-[10px] font-bold text-sw-blue uppercase tracking-widest hover:underline"
                     >
                       Restablecer
                     </button>
@@ -149,7 +149,7 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
                   >
                     <div className="flex items-center gap-3">
                       <Zap size={18} className={a11y.reduceMotion ? 'rotate-180' : ''} />
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Reducir Animaciones</span>
+                      <span className="text-xs font-bold uppercase tracking-widest">Reducir Animaciones</span>
                     </div>
                     <div className={`w-8 h-4 rounded-full relative transition-all ${a11y.reduceMotion ? 'bg-sw-red' : 'bg-gray-700'}`}>
                       <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${a11y.reduceMotion ? 'left-4.5' : 'left-0.5'}`}></div>
@@ -193,7 +193,7 @@ const LoginView = ({ onLogin }: { onLogin: () => void }) => {
           ACCESO CON GOOGLE
         </button>
         
-        <p className="mt-8 text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center">
+        <p className="mt-8 text-xs text-gray-500 font-bold uppercase tracking-widest text-center">
           Solo personal autorizado. El acceso requiere credenciales de la República.
         </p>
       </motion.div>
@@ -228,6 +228,7 @@ export default function App() {
   const [shifts, setShifts] = useState<any[]>([]);
   const [shiftsAudit, setShiftsAudit] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   
   // UI State
   const [toast, setToast] = useState<any>(null);
@@ -237,21 +238,24 @@ export default function App() {
   const [userModalId, setUserModalId] = useState<string | null>(null);
   const [showUserCreateModal, setShowUserCreateModal] = useState(false);
   const [categoryModalId, setCategoryModalId] = useState<string | null>(null);
+  const [inventoryModalId, setInventoryModalId] = useState<any>(null); // {id, type: 'raw' | 'store'}
 
-  // Shift Timer State
-  const [shiftStart] = useState(() => {
-    const stored = localStorage.getItem('shiftStart');
-    if (stored) return parseInt(stored, 10);
-    const now = Date.now();
-    localStorage.setItem('shiftStart', now.toString());
-    return now;
-  });
   const [shiftElapsed, setShiftElapsed] = useState(0);
 
+  // Current Shift
+  const currentShift = useMemo(() => shifts.find(s => s.status === 'open'), [shifts]);
+
   useEffect(() => {
-    const timer = setInterval(() => setShiftElapsed(Date.now() - shiftStart), 1000);
+    if (!currentShift?.openedAt) {
+      setShiftElapsed(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setShiftElapsed(Date.now() - currentShift.openedAt);
+    }, 1000);
+    setShiftElapsed(Date.now() - currentShift.openedAt);
     return () => clearInterval(timer);
-  }, [shiftStart]);
+  }, [currentShift]);
 
   const formatShiftTime = (ms: number) => {
     const totalSecs = Math.floor(ms / 1000);
@@ -273,9 +277,6 @@ export default function App() {
   const [showCashMovementModal, setShowCashMovementModal] = useState(false);
   const [showCloseShiftModal, setShowCloseShiftModal] = useState(false);
   const [showZReportModal, setShowZReportModal] = useState<any>(null); // holds the shift object
-
-  // Current Shift
-  const currentShift = useMemo(() => shifts.find(s => s.status === 'open'), [shifts]);
 
   useEffect(() => {
     if (!currentShift && isAuthReady && currentUser) {
@@ -327,11 +328,12 @@ export default function App() {
     if (!job) return;
     try {
       const updatedTimeline = [...job.timeline, { status, timestamp: Date.now(), workerId: currentUser?.id }];
-      await setDoc(doc(db, 'jobs', jobId), { 
-        ...job, 
-        status: status, // Update the root status for Kanban filtering
-        timeline: updatedTimeline 
-      });
+      const isValidStatus = STATUS_FLOW.includes(status);
+      const updateData: any = { ...job, timeline: updatedTimeline };
+      if (isValidStatus) {
+        updateData.status = status;
+      }
+      await setDoc(doc(db, 'jobs', jobId), updateData);
     } catch (e) {
       console.error(e);
     }
@@ -452,18 +454,11 @@ export default function App() {
           await setDoc(doc(db, 'users', user.uid), adminData);
           setCurrentUser(adminData);
         } else {
-          // Register new user automatically
-          const newUserData = {
-            id: user.uid,
-            rut: '00000000-0', // Placeholder
-            name: user.displayName || 'Nuevo Usuario',
-            role: 'Operario', // Default role for new registrations
-            pin: '0000',
-            active: true,
-            email: user.email
-          };
-          await setDoc(doc(db, 'users', user.uid), newUserData);
-          setCurrentUser(newUserData);
+          // Block login for unregistered users
+          await auth.signOut();
+          setFirebaseUser(null);
+          setCurrentUser(null);
+          alert('ACCESO DENEGADO.\n\nSu cuenta de Google no está autorizada ni registrada en StarParks CarWash Pro.\n\nContáctese con la administración a inversioneselcactus@gmail.com o a Daelpaso para solicitar su incorporación al sistema.');
         }
       } else {
         setFirebaseUser(null);
@@ -537,8 +532,12 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.GET, 'shifts_audit'));
     }
 
+    const unsubCalendar = onSnapshot(collection(db, 'calendarEvents'), (snapshot) => {
+      setCalendarEvents(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'calendarEvents'));
+
     return () => {
-      unsubJobs(); unsubClients(); unsubUsers(); unsubServices(); unsubStore(); unsubRaw(); unsubShifts(); unsubTransactions(); unsubCategories(); unsubAudit();
+      unsubJobs(); unsubClients(); unsubUsers(); unsubServices(); unsubStore(); unsubRaw(); unsubShifts(); unsubTransactions(); unsubCategories(); unsubAudit(); unsubCalendar();
     };
   }, [isAuthReady, firebaseUser]);
 
@@ -580,9 +579,7 @@ export default function App() {
     { id: 'clientes', label: 'Clientes', icon: Users, role: null },
     { id: 'calendario', label: 'Calendario', icon: Calendar, role: null },
     { id: 'hist', label: 'Historial', icon: History, role: null },
-    { id: 'ventas', label: 'Ventas', icon: TrendingUp, role: 'Admin' },
-    { id: 'turnos', label: 'Turnos', icon: Clock, role: 'Admin' },
-    { id: 'tarifas', label: 'Tarifas', icon: DollarSign, role: 'Admin' },
+    { id: 'reportes', label: 'Reportes', icon: TrendingUp, role: 'Admin' },
     { id: 'inventario', label: 'Inventario', icon: Package, role: 'Admin' },
     { id: 'config', label: 'Configuración', icon: Settings, role: null },
   ];
@@ -664,7 +661,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-black tracking-tighter sw-title-font leading-none sw-title group-hover:text-white transition-colors">STARPARKS</h1>
-              <p className="text-[10px] text-sw-yellow font-bold uppercase tracking-[0.3em] mt-0.5">Carwash Pro V1</p>
+              <p className="text-xs text-sw-yellow font-bold uppercase tracking-[0.3em] mt-0.5">Carwash Pro V1</p>
             </div>
           </div>
         </div>
@@ -675,7 +672,7 @@ export default function App() {
           <div className="flex items-center gap-4 border-l border-gray-800 pl-8">
             <div className="text-right">
               <div className="text-sm font-bold text-white uppercase tracking-widest">{currentUser.name}</div>
-              <div className="text-[10px] text-sw-blue font-bold uppercase tracking-widest">{currentUser.role}</div>
+              <div className="text-xs text-sw-blue font-bold uppercase tracking-widest">{currentUser.role}</div>
             </div>
             <button 
               onClick={handleLogout}
@@ -718,7 +715,7 @@ export default function App() {
                     onClick={() => { setActiveTab(item.id); setIsSidebarOpen(false); }}
                     disabled={!isAllowed}
                     title={isSidebarCollapsed ? item.label : ''}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-xl font-bold uppercase tracking-widest text-sm transition-all border ${
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-xl font-ui font-bold uppercase tracking-widest text-sm transition-all border ${
                       activeTab === item.id 
                         ? 'bg-sw-blue/10 border-sw-blue text-sw-blue shadow-[0_0_15px_rgba(0,168,255,0.1)]' 
                         : isAllowed 
@@ -729,6 +726,17 @@ export default function App() {
                     <item.icon size={20} className="shrink-0" />
                     {!isSidebarCollapsed && <span>{item.label}</span>}
                     {!isAllowed && !isSidebarCollapsed && <Shield size={14} className="ml-auto text-sw-red" />}
+                    
+                    {/* Active Indicator Bar */}
+                    {activeTab === item.id && (
+                      <motion.div 
+                        layoutId="activeIndicator"
+                        className="absolute left-0 w-1 h-8 bg-sw-blue rounded-r-full shadow-[0_0_10px_rgba(0,168,255,0.8)]"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -737,41 +745,57 @@ export default function App() {
             <div className="mt-auto pt-6 border-t border-gray-800 relative">
               <div className={`bg-black/40 ${isSidebarCollapsed ? 'p-2' : 'p-4'} rounded-xl border border-gray-800 transition-all`}>
                 <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} mb-4`}>
-                  <div className="w-2 h-2 rounded-full bg-sw-green animate-pulse shrink-0"></div>
-                  {!isSidebarCollapsed && <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Gestión de Turno</span>}
+                  <div className={`w-2.5 h-2.5 rounded-full ${currentShift ? 'bg-sw-green animate-pulse' : 'bg-gray-600'} shrink-0`}></div>
+                  {!isSidebarCollapsed && <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Gestión de Turno</span>}
                 </div>
                 
                 <div className="mb-4">
                   {!isSidebarCollapsed && (
-                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                      <Clock size={12} /> Tiempo Transcurrido
+                    <div className="text-sm text-gray-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                      <Clock size={14} /> Tiempo Transcurrido
                     </div>
                   )}
-                  <div className={`${isSidebarCollapsed ? 'text-[8px]' : 'text-lg'} font-mono font-black text-sw-green tracking-wider text-center`}>
-                    {isSidebarCollapsed ? formatShiftTime(shiftElapsed).split(':').slice(0,2).join(':') : formatShiftTime(shiftElapsed)}
+                  <div className={`${isSidebarCollapsed ? 'text-xs' : 'text-xl'} font-mono font-black ${currentShift ? 'text-sw-green' : 'text-gray-600'} tracking-wider text-center`}>
+                    {currentShift ? (isSidebarCollapsed ? formatShiftTime(shiftElapsed).split(':').slice(0,2).join(':') : formatShiftTime(shiftElapsed)) : '--:--:--'}
                   </div>
-                  {!isSidebarCollapsed && <div className="text-[10px] text-gray-500 font-mono mt-1 text-center">Inicio: {new Date(shiftStart).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>}
+                  {!isSidebarCollapsed && currentShift && (
+                    <div className="text-sm text-gray-500 font-mono mt-1 text-center">
+                      Inicio: {new Date(currentShift.openedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      {currentShift.operatorName && <span className="block text-xs text-sw-blue mt-0.5">{currentShift.operatorName}</span>}
+                    </div>
+                  )}
                 </div>
 
                 <div className={`space-y-2 border-t border-gray-800 pt-4 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
-                  <button 
-                    onClick={() => setShowCashMovementModal(true)}
-                    disabled={!currentShift}
-                    title="Movimiento de Caja"
-                    className={`w-full py-2 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-blue/10 border border-sw-blue/30 text-sw-blue text-[10px] font-bold uppercase tracking-widest hover:bg-sw-blue hover:text-black transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    <DollarSign size={14} className="shrink-0" />
-                    {!isSidebarCollapsed && "Movimiento de Caja"}
-                  </button>
-                  <button 
-                    onClick={() => setShowCloseShiftModal(true)}
-                    disabled={!currentShift}
-                    title="Cerrar Turno"
-                    className={`w-full py-2 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-red/10 border border-sw-red/30 text-sw-red text-[10px] font-bold uppercase tracking-widest hover:bg-sw-red hover:text-white transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    <LogOut size={14} className="shrink-0" />
-                    {!isSidebarCollapsed && "Cerrar Turno"}
-                  </button>
+                  {currentShift ? (
+                    <>
+                      <button 
+                        onClick={() => setShowCashMovementModal(true)}
+                        title="Movimiento de Caja"
+                        className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-blue/10 border border-sw-blue/30 text-sw-blue text-sm font-bold uppercase tracking-widest hover:bg-sw-blue hover:text-black transition-all flex items-center gap-2`}
+                      >
+                        <DollarSign size={16} className="shrink-0" />
+                        {!isSidebarCollapsed && "Mov. de Caja"}
+                      </button>
+                      <button 
+                        onClick={() => setShowCloseShiftModal(true)}
+                        title="Cerrar Turno"
+                        className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-red/10 border border-sw-red/30 text-sw-red text-sm font-bold uppercase tracking-widest hover:bg-sw-red hover:text-white transition-all flex items-center gap-2`}
+                      >
+                        <LogOut size={16} className="shrink-0" />
+                        {!isSidebarCollapsed && "Cerrar Turno"}
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      onClick={() => setShowOpenShiftModal(true)}
+                      title="Iniciar Turno"
+                      className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-green/10 border border-sw-green/30 text-sw-green text-sm font-bold uppercase tracking-widest hover:bg-sw-green hover:text-black transition-all flex items-center gap-2`}
+                    >
+                      <CheckCircle2 size={16} className="shrink-0" />
+                      {!isSidebarCollapsed && "Iniciar Turno"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -817,7 +841,7 @@ export default function App() {
               )}
               {activeTab === 'calendario' && (
                 <AuthGuard currentUser={currentUser} hasPermission={hasPermission}>
-                  <CalendarView jobs={jobs} setDetailModalJobId={setDetailModalJobId} />
+                  <CalendarView events={calendarEvents} showToast={showToast} currentUser={currentUser} />
                 </AuthGuard>
               )}
               {activeTab === 'hist' && (
@@ -828,7 +852,7 @@ export default function App() {
                 </AuthGuard>
               )}
               
-              {activeTab === 'ventas' && (
+              {activeTab === 'reportes' && (
                 <AuthGuard currentUser={currentUser} requiredRole="Admin" hasPermission={hasPermission}>
                   <DailyReportView 
                     jobs={jobs} 
@@ -838,32 +862,12 @@ export default function App() {
                     initialSubTab="ventas"
                     currentUser={currentUser}
                     showToast={showToast}
-                  />
-                </AuthGuard>
-              )}
-              {activeTab === 'turnos' && (
-                <AuthGuard currentUser={currentUser} requiredRole="Admin" hasPermission={hasPermission}>
-                  <DailyReportView 
-                    jobs={jobs} 
-                    transactions={transactions} 
-                    shifts={shifts} 
-                    onShowZReport={setShowZReportModal} 
-                    initialSubTab="turnos"
-                    currentUser={currentUser}
-                    showToast={showToast}
-                  />
-                </AuthGuard>
-              )}
-              {activeTab === 'tarifas' && (
-                <AuthGuard currentUser={currentUser} requiredRole="Admin" hasPermission={hasPermission}>
-                  <PricingView 
-                    services={services} 
-                    setServices={setServices} 
-                    storeProducts={storeProducts} 
-                    setStoreProducts={setStoreProducts} 
+                    services={services}
+                    storeProducts={storeProducts}
                     categories={categories}
-                    showToast={showToast} 
-                    hasPermission={hasPermission} 
+                    setServices={setServices}
+                    setStoreProducts={setStoreProducts}
+                    hasPermission={hasPermission}
                     setServiceModalId={setServiceModalId}
                     setCategoryModalId={setCategoryModalId}
                   />
@@ -878,6 +882,7 @@ export default function App() {
                     setStoreProducts={setStoreProducts} 
                     showToast={showToast} 
                     hasPermission={hasPermission} 
+                    setInventoryModalId={setInventoryModalId}
                   />
                 </AuthGuard>
               )}
@@ -1080,7 +1085,9 @@ export default function App() {
             key="client-detail-modal"
             clientId={clientModalId} 
             clients={clients} 
+            jobs={jobs}
             onClose={() => setClientModalId(null)} 
+            setDetailModalJobId={setDetailModalJobId}
           />
         )}
 
@@ -1168,6 +1175,18 @@ export default function App() {
             hasPermission={hasPermission}
           />
         )}
+
+        {inventoryModalId && (
+          <InventoryItemModal 
+            key="inventory-item-modal"
+            item={inventoryModalId.id === 'new' ? null : (inventoryModalId.type === 'raw' ? rawMaterials.find((r:any)=>r.id===inventoryModalId.id) : storeProducts.find((p:any)=>p.id===inventoryModalId.id))}
+            type={inventoryModalId.type}
+            onClose={() => setInventoryModalId(null)}
+            showToast={showToast}
+            hasPermission={hasPermission}
+          />
+        )}
+
       </AnimatePresence>
     </div>
   );

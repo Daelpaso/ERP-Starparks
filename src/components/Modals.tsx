@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShoppingCart, FileText, Clock, Trash2, CheckCircle2, ShieldCheck, AlertTriangle, Edit2, Shield, ChevronLeft, UserPlus, Eye, EyeOff } from 'lucide-react';
-import { calculateParkingTimeAndFee } from '../lib/utils';
+import { X, ShoppingCart, FileText, Clock, Trash2, CheckCircle2, ShieldCheck, AlertTriangle, Edit2, Shield, ChevronLeft, UserPlus, Eye, EyeOff, MessageCircle, MessageSquare, Printer, DollarSign, Package, Plus } from 'lucide-react';
+import { calculateParkingTimeAndFee, generateDeliveryVoucher } from '../lib/utils';
 import { PAYMENT_METHODS, DOC_TYPES } from '../lib/constants';
-import { doc, updateDoc, setDoc, db } from '../firebase';
+import { doc, updateDoc, setDoc, deleteDoc, db, increment } from '../firebase';
 
 export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStoreModalJobId, addTimelineEvent, hasPermission }: any) => {
   const job = jobs.find((j: any) => j.id === jobId);
   const [note, setNote] = useState(job?.notes || '');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePin, setDeletePin] = useState('');
   if (!job) return null;
 
   const { extraFee, extraMins, totalElapsedSinceReady } = calculateParkingTimeAndFee(job);
@@ -24,22 +26,60 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
     }
   };
 
+  const handleDeleteVehicle = async () => {
+    if (deletePin !== '1124') {
+      alert('PIN Inválido');
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'jobs', jobId));
+      onClose();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div 
       className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-md"
       onClick={onClose}
     >
       <div 
-        className="panel-glass rounded-2xl w-full max-w-2xl border border-sw-blue/30 shadow-[0_0_50px_rgba(0,168,255,0.15)] flex flex-col max-h-[90vh]"
+        className="panel-glass rounded-2xl w-full max-w-4xl border border-sw-blue/30 shadow-[0_0_50px_rgba(0,168,255,0.15)] flex flex-col max-h-[90vh] relative"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-6 border-b border-gray-800 bg-sw-blue/5">
           <div>
             <h2 className="text-3xl font-mono font-black text-white tracking-tighter">{job.plate}</h2>
-            <p className="text-[10px] text-sw-blue font-bold uppercase tracking-[0.3em]">{job.id}</p>
+            <p className="text-xs text-sw-blue font-ui font-bold uppercase tracking-[0.2em]">{job.id}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-sw-red/20 hover:text-sw-red rounded-full transition-all text-gray-500"><X size={24} /></button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => generateDeliveryVoucher(job)} className="p-2 hover:bg-sw-blue/20 text-gray-500 hover:text-sw-blue rounded-xl transition-all" title="Reimprimir Voucher"><Printer size={24} /></button>
+            <button onClick={() => setShowDeleteConfirm(true)} className="p-2 hover:bg-sw-red/20 text-gray-500 hover:text-sw-red rounded-xl transition-all" title="Eliminar Vehículo"><Trash2 size={24} /></button>
+            <button onClick={onClose} className="p-2 hover:bg-sw-red/20 hover:text-sw-red rounded-full transition-all text-gray-500"><X size={24} /></button>
+          </div>
         </div>
+        
+        {showDeleteConfirm && (
+          <div className="absolute inset-0 bg-black/95 z-50 flex items-center justify-center p-6 rounded-2xl flex-col backdrop-blur-md">
+            <AlertTriangle size={64} className="text-sw-red mb-6 animate-pulse" />
+            <h2 className="text-2xl font-black uppercase text-white mb-2 text-center">PELIGRO: Eliminar Vehículo</h2>
+            <p className="text-gray-400 text-center mb-8 max-w-md">Esta acción es irreversible y eliminará completamente el vehículo del sistema.</p>
+            <div className="w-full max-w-xs space-y-4">
+              <input 
+                type="password" 
+                placeholder="PIN ADMIN" 
+                value={deletePin} 
+                onChange={(e) => setDeletePin(e.target.value)} 
+                className="w-full bg-black border border-sw-red text-sw-red text-center font-mono text-2xl py-3 rounded-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-sw-red"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => { setShowDeleteConfirm(false); setDeletePin(''); }} className="py-3 rounded-xl border border-gray-600 text-gray-400 hover:bg-gray-800 font-bold uppercase tracking-widest text-xs">Cancelar</button>
+                <button onClick={handleDeleteVehicle} disabled={deletePin.length !== 4} className="py-3 rounded-xl bg-sw-red/20 border border-sw-red text-sw-red hover:bg-sw-red hover:text-white font-bold uppercase tracking-widest text-xs disabled:opacity-50 transition-all">Eliminar</button>
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -94,7 +134,7 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
                 </div>
               </div>
               <div className={`p-4 rounded-xl border transition-all ${extraFee > 0 ? 'bg-sw-red/5 border-sw-red/20 shadow-[0_0_20px_rgba(239,68,68,0.1)]' : 'bg-sw-green/5 border-sw-green/20'}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${extraFee > 0 ? 'text-sw-red' : 'text-sw-green'}`}>
+                <div className={`text-xs font-ui font-bold uppercase tracking-[0.1em] mb-2 ${extraFee > 0 ? 'text-sw-red' : 'text-sw-green'}`}>
                   {extraFee > 0 ? 'Total con Multa' : 'Total Acumulado'}
                 </div>
                 <div className={`text-3xl font-mono font-black ${extraFee > 0 ? 'text-sw-red' : 'text-sw-green'}`}>
@@ -271,7 +311,7 @@ export const QuickStoreModal = ({ jobId, jobs, setJobs, storeProducts, showToast
   );
 };
 
-export const ClientDetailModal = ({ clientId, clients, onClose }: any) => {
+export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailModalJobId }: any) => {
   const client = clients.find((c: any) => c.id === clientId);
   const [activeTab, setActiveTab] = useState('resumen');
 
@@ -295,11 +335,11 @@ export const ClientDetailModal = ({ clientId, clients, onClose }: any) => {
         </div>
         
         <div className="flex border-b border-gray-800">
-          {['resumen', 'financiero', 'marketing', 'ventas'].map(tab => (
+          {['resumen', 'financiero', 'marketing'].map(tab => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'text-sw-yellow border-b-2 border-sw-yellow bg-sw-yellow/5' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
+              className={`flex-1 py-3 text-sm font-bold uppercase tracking-widest transition-all ${activeTab === tab ? 'text-sw-yellow border-b-2 border-sw-yellow bg-sw-yellow/5' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
             >
               {tab}
             </button>
@@ -321,21 +361,142 @@ export const ClientDetailModal = ({ clientId, clients, onClose }: any) => {
                   <div className="text-sm text-white"><span className="text-gray-500 mr-2">Registro:</span>{new Date(client.date).toLocaleDateString('es-CL')}</div>
                 </div>
               </div>
+
+              {/* 6+1 Tracker */}
+              <div className="panel-glass p-6 rounded-2xl border border-gray-800">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-bold text-sw-yellow uppercase tracking-widest flex items-center gap-2">
+                    <CheckCircle2 size={18} /> Progreso Fidelización (6+1: El séptimo lavado es ¡GRATIS!)
+                  </h3>
+                  <span className="text-xs font-mono text-gray-400">{(client.visits % 7) || 0}/6 Visitas</span>
+                </div>
+                <div className="flex gap-2 justify-between max-w-lg mx-auto">
+                  {Array.from({ length: 7 }).map((_, i) => {
+                    const isCompleted = i < (client.visits % 7);
+                    const isGoal = i === 6;
+                    return (
+                      <div key={i} className="flex flex-col items-center gap-2">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
+                          isCompleted 
+                            ? 'bg-sw-green/20 border-sw-green text-sw-green shadow-[0_0_15px_rgba(46,204,113,0.3)]' 
+                            : isGoal 
+                              ? 'bg-sw-yellow/10 border-sw-yellow border-dashed text-sw-yellow' 
+                              : 'bg-black/40 border-gray-700 text-gray-600'
+                        }`}>
+                          {isCompleted ? <CheckCircle2 size={20} /> : isGoal ? <span className="font-black text-xs">GRATIS</span> : (i + 1)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
           {activeTab === 'financiero' && (
-            <div className="text-center py-12 text-gray-500 text-sm font-bold uppercase tracking-widest">
-              Módulo Financiero en Desarrollo
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Total Gastado</div>
+                  <div className="text-2xl font-mono font-black text-sw-green">
+                    ${jobs?.filter((j: any) => j.plate === client.plate && j.status === 'Entregado').reduce((acc: number, j: any) => acc + (j.total || 0), 0).toLocaleString('es-CL')}
+                  </div>
+                </div>
+                <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Ticket Promedio</div>
+                  <div className="text-2xl font-mono font-black text-sw-blue">
+                    ${(client.visits > 0 ? (jobs?.filter((j: any) => j.plate === client.plate && j.status === 'Entregado').reduce((acc: number, j: any) => acc + (j.total || 0), 0) / client.visits) : 0).toLocaleString('es-CL', {maximumFractionDigits: 0})}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end mt-4 pt-4 border-t border-gray-800">
+                <button 
+                  onClick={async () => {
+                    const pin = window.prompt('Ingrese PIN de Administrador (1124) para agregar registro manual:');
+                    if (pin === '1124') {
+                       const amountStr = window.prompt('Ingrese el monto de la venta manual (ej: 15000):');
+                       const amount = parseInt(amountStr || '0', 10);
+                       if (amount > 0) {
+                         try {
+                           const jobId = `MAN-${Date.now()}`;
+                           await setDoc(doc(db, 'jobs', jobId), {
+                             id: jobId, plate: client.plate, status: 'Entregado', entryDate: Date.now(), exitDate: Date.now(),
+                             total: amount, serviceTotal: amount, serviceName: 'Venta Manual',
+                             isManual: true, paymentMethod: 'Efectivo', docType: 'Boleta'
+                           });
+                           await updateDoc(doc(db, 'clients', clientId), { visits: increment(1) });
+                           alert('Registro manual agregado correctamente.');
+                         } catch (e) {
+                           alert('Error al agregar registro.');
+                         }
+                       }
+                    } else if (pin !== null) {
+                      alert('PIN Incorrecto');
+                    }
+                  }}
+                  className="bg-black border border-sw-blue text-sw-blue px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-sw-blue hover:text-black transition-all flex items-center gap-2"
+                >
+                  <Plus size={16} /> Agregar Venta Manual
+                </button>
+              </div>
+
+              <div className="panel-glass rounded-xl border border-gray-800 overflow-hidden mt-4">
+                <table className="w-full text-left">
+                  <thead className="bg-black/60 border-b border-gray-800">
+                    <tr>
+                      <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Fecha</th>
+                      <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Servicio</th>
+                      <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    {jobs?.filter((j: any) => j.plate === client.plate && j.status === 'Entregado').sort((a: any, b: any) => b.entryDate - a.entryDate).map((job: any) => (
+                      <tr key={job.id} className="hover:bg-white/5 cursor-pointer" onClick={() => { if(setDetailModalJobId) setDetailModalJobId(job.id); }}>
+                        <td className="p-4 text-sm text-gray-300">{new Date(job.entryDate).toLocaleDateString('es-CL')}</td>
+                        <td className="p-4 text-sm font-bold text-white uppercase tracking-wider">{job.serviceName || 'Venta Tienda'}{job.isManual ? ' (Manual)' : ''}</td>
+                        <td className="p-4 text-sm font-mono font-bold text-sw-green">${job.total?.toLocaleString('es-CL')}</td>
+                      </tr>
+                    ))}
+                    {!jobs?.find((j: any) => j.plate === client.plate && j.status === 'Entregado') && (
+                      <tr><td colSpan={3} className="p-8 text-center text-gray-600 text-xs font-bold uppercase tracking-widest">Sin historial de pagos registrados</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
           {activeTab === 'marketing' && (
-            <div className="text-center py-12 text-gray-500 text-sm font-bold uppercase tracking-widest">
-              Módulo de Marketing en Desarrollo
-            </div>
-          )}
-          {activeTab === 'ventas' && (
-            <div className="text-center py-12 text-gray-500 text-sm font-bold uppercase tracking-widest">
-              Historial de Ventas en Desarrollo
+            <div className="space-y-6">
+              <div className="panel-glass p-6 rounded-2xl border border-sw-green/30">
+                <h3 className="text-sm font-bold text-sw-green uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <MessageSquare size={18} /> Comunicación por WhatsApp
+                </h3>
+                <p className="text-gray-400 text-sm mb-6">El cliente tiene vinculado el número: <strong className="text-white font-mono">{client.phone}</strong></p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => {
+                      if (!client.phone) return alert('Cliente no tiene teléfono registrado');
+                      const phone = client.phone.replace(/\D/g, '');
+                      const msg = encodeURIComponent(`¡Buenas noticias de StarParks CarWash!\n\nEstimado ${client.name}, ¡ha ganado un LAVADO GRATIS! 🎉\nAcaba de completar sus 6 visitas. Lo esperamos para canjear su 7mo lavado 100% gratuito.\n\nMostrando este mensaje en caja validaremos su premio. ¡Gracias por preferirnos!`);
+                      window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                    }}
+                    className="bg-sw-green/10 border border-sw-green/50 text-sw-green px-4 py-4 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-sw-green hover:text-black transition-all text-center"
+                  >
+                    Notificar Premio (Lavado Gratis)
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      if (!client.phone) return alert('Cliente no tiene teléfono registrado');
+                      const phone = client.phone.replace(/\D/g, '');
+                      window.open(`https://wa.me/${phone}`, '_blank');
+                    }}
+                    className="bg-black/40 border border-gray-700 text-gray-300 px-4 py-4 rounded-xl text-sm font-bold uppercase tracking-widest hover:border-white hover:text-white transition-all text-center"
+                  >
+                    Mensaje Personalizado (Abrir Chat)
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1102,6 +1263,19 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
         timeline: [...job.timeline, { status: 'Entregado', timestamp: now, workerId: null }]
       });
       showToast(`Misión Finalizada: ${job.plate}`, 'success');
+      
+      // Auto-generate Delivery Voucher
+      generateDeliveryVoucher({
+        ...job,
+        exitDate: now,
+        paymentMethod: payMethod,
+        docType: docType,
+        parkingFee: extraFee,
+        parkingMins: extraMins,
+        discount: discountAmount,
+        total: finalTotal
+      });
+
       onClose();
     } catch (error) {
       showToast('Error al finalizar', 'error');
@@ -1221,3 +1395,160 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
     </div>
   );
 };
+
+export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermission }: any) => {
+  const isNew = !item;
+  const [name, setName] = useState(item?.name || '');
+  const [stock, setStock] = useState(item?.stock || 0);
+  const [unitCost, setUnitCost] = useState(item?.unitCost || 0);
+  const [price, setPrice] = useState(item?.price || 0);
+  const [uom, setUom] = useState(item?.uom || 'un');
+  const [reorderPoint, setReorderPoint] = useState(item?.reorderPoint || 0);
+  const [icon, setIcon] = useState(item?.icon || '📦');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState('');
+
+  const handleSave = async () => {
+    if (stock !== item?.stock || price !== item?.price || unitCost !== item?.unitCost) {
+      if (pin !== '1124') {
+        setShowPinModal(true);
+        return;
+      }
+    }
+
+    try {
+      const data: any = {
+        name,
+        stock: Number(stock),
+      };
+
+      if (type === 'raw') {
+        data.unitCost = Number(unitCost);
+        data.uom = uom;
+        data.reorderPoint = Number(reorderPoint);
+      } else {
+        data.price = Number(price);
+        data.icon = icon;
+      }
+
+      if (isNew) {
+        const id = type === 'raw' ? `RM-${Date.now()}` : `SP-${Date.now()}`;
+        data.id = id;
+        await setDoc(doc(db, type === 'raw' ? 'rawMaterials' : 'storeProducts', id), data);
+        showToast('Item creado correctamente', 'success');
+      } else {
+        await updateDoc(doc(db, type === 'raw' ? 'rawMaterials' : 'storeProducts', item.id), data);
+        showToast('Item actualizado correctamente', 'success');
+      }
+      onClose();
+    } catch (e) {
+      showToast('Error al guardar item', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (confirm('¿Está seguro de eliminar este item?')) {
+      const pinPrompt = window.prompt('Ingrese PIN de Administrador (1124) para eliminar:');
+      if (pinPrompt === '1124') {
+        try {
+          await deleteDoc(doc(db, type === 'raw' ? 'rawMaterials' : 'storeProducts', item.id));
+          showToast('Item eliminado', 'success');
+          onClose();
+        } catch (e) {
+          showToast('Error al eliminar', 'error');
+        }
+      } else if (pinPrompt !== null) {
+        alert('PIN Incorrecto');
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md" onClick={onClose}>
+      <div className="panel-glass rounded-2xl w-full max-w-md border border-sw-yellow/30 shadow-[0_0_50px_rgba(255,232,31,0.15)] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center p-6 border-b border-gray-800 bg-sw-yellow/5">
+          <h2 className="text-xl font-bold font-mono text-white tracking-widest uppercase">{isNew ? 'NUEVO' : 'EDITAR'} {type === 'raw' ? 'INSUMO' : 'PRODUCTO'}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-sw-red transition-all"><X size={24} /></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Nombre</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-yellow outline-none uppercase" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Stock Actual</label>
+              <input type="number" value={stock} onChange={e => setStock(Number(e.target.value))} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white font-mono focus:border-sw-yellow outline-none" />
+            </div>
+            {type === 'raw' ? (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Unidad</label>
+                <input type="text" value={uom} onChange={e => setUom(e.target.value)} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-yellow outline-none" />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Icono</label>
+                <input type="text" value={icon} onChange={e => setIcon(e.target.value)} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white text-center text-xl focus:border-sw-yellow outline-none" />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">{type === 'raw' ? 'Costo Unitario' : 'Precio Venta'}</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-mono">$</span>
+                <input 
+                  type="number" 
+                  value={type === 'raw' ? unitCost : price} 
+                  onChange={e => type === 'raw' ? setUnitCost(Number(e.target.value)) : setPrice(Number(e.target.value))} 
+                  className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 pl-8 text-white font-mono focus:border-sw-yellow outline-none" 
+                />
+              </div>
+            </div>
+            {type === 'raw' && (
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Punto Reorden</label>
+                <input type="number" value={reorderPoint} onChange={e => setReorderPoint(Number(e.target.value))} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white font-mono focus:border-sw-yellow outline-none" />
+              </div>
+            )}
+          </div>
+
+          {showPinModal && (
+            <div className="bg-sw-red/10 border border-sw-red/30 p-4 rounded-xl space-y-3">
+              <p className="text-[10px] font-bold text-sw-red uppercase tracking-widest text-center">PIN DE ADMINISTRADOR REQUERIDO</p>
+              <input 
+                type="password" 
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                className="w-full bg-black/60 border border-sw-red/50 rounded-lg p-3 text-center text-white font-mono tracking-[1em] outline-none"
+                placeholder="****"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setShowPinModal(false); setPin(''); }} className="flex-1 py-2 rounded-lg bg-gray-800 text-gray-400 text-[10px] font-bold uppercase">Cancelar</button>
+                <button onClick={handleSave} className="flex-1 py-2 rounded-lg bg-sw-red text-white text-[10px] font-bold uppercase">Validar</button>
+              </div>
+            </div>
+          )}
+
+          {!showPinModal && (
+            <div className="flex gap-3 pt-4">
+              {!isNew && (
+                <button onClick={handleDelete} className="p-3 rounded-xl border border-sw-red text-sw-red hover:bg-sw-red hover:text-white transition-all">
+                  <Trash2 size={24} />
+                </button>
+              )}
+              <button onClick={handleSave} className="flex-1 py-4 rounded-xl bg-sw-yellow text-black font-bold uppercase tracking-widest hover:scale-105 transition-all">
+                {isNew ? 'CREAR ITEM' : 'GUARDAR CAMBIOS'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+

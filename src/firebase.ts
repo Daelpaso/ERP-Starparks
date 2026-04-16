@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { 
   getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, query, updateDoc, deleteDoc,
-  getDocFromServer, increment
+  getDocFromServer, increment, addDoc
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -86,5 +86,6 @@ export {
   query,
   updateDoc,
   deleteDoc,
-  increment
+  increment,
+  addDoc
 };
