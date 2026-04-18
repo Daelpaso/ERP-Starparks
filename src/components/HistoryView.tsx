@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History, Download, FileSpreadsheet, Eye, LayoutGrid, List, GripVertical, Printer } from 'lucide-react';
+import { Search, History, Download, FileSpreadsheet, Eye, LayoutGrid, List, GripVertical } from 'lucide-react';
 import { Reorder, AnimatePresence, motion } from 'motion/react';
-import { exportToExcel, generateDeliveryVoucher } from '../lib/utils';
+import { exportToExcel } from '../lib/utils';
 
 const DEFAULT_COLUMNS = [
   { id: 'id', label: 'ID' },
@@ -39,7 +39,7 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
 
     if (filterMode === 'current') {
       if (!currentShift) return false;
-      return j.shiftId === currentShift.id || j.exitDate >= currentShift.openedAt;
+      return j.exitDate >= currentShift.startTime;
     }
 
     if (filterMode === 'previous') {
@@ -82,19 +82,19 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
           <div className="flex bg-black/40 p-1 rounded-lg border border-gray-800">
             <button 
               onClick={() => setFilterMode('current')}
-              className={`px-4 py-2 rounded text-xs sm:text-sm font-bold uppercase tracking-widest transition-all ${filterMode === 'current' ? 'bg-sw-blue text-black' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${filterMode === 'current' ? 'bg-sw-blue text-black' : 'text-gray-500 hover:text-gray-300'}`}
             >
               Turno Actual
             </button>
             <button 
               onClick={() => setFilterMode('previous')}
-              className={`px-4 py-2 rounded text-xs sm:text-sm font-bold uppercase tracking-widest transition-all ${filterMode === 'previous' ? 'bg-sw-blue text-black' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${filterMode === 'previous' ? 'bg-sw-blue text-black' : 'text-gray-500 hover:text-gray-300'}`}
             >
               Día Específico
             </button>
             <button 
               onClick={() => setFilterMode('all')}
-              className={`px-4 py-2 rounded text-xs sm:text-sm font-bold uppercase tracking-widest transition-all ${filterMode === 'all' ? 'bg-sw-blue text-black' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${filterMode === 'all' ? 'bg-sw-blue text-black' : 'text-gray-500 hover:text-gray-300'}`}
             >
               Todo
             </button>
@@ -105,7 +105,7 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
               type="date" 
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-black border border-gray-700 rounded px-4 py-2 text-sm text-white outline-none focus:border-sw-blue"
+              className="bg-black border border-gray-700 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-sw-blue"
             />
           )}
 
@@ -142,7 +142,7 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
             title="Exportar Excel"
           >
             <Download size={20} />
-            <span className="hidden sm:inline text-sm font-bold uppercase tracking-widest">Exportar</span>
+            <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest">Exportar</span>
           </button>
         </div>
       </div>
@@ -177,12 +177,12 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
                   <div className="text-xl font-mono font-bold text-white group-hover:text-sw-blue transition-colors">{job.plate}</div>
                   <div className="text-xs text-sw-yellow font-bold uppercase tracking-widest">{job.clientName || 'Cliente'}</div>
                 </div>
-                <span className="bg-black/50 px-2 py-1 rounded text-xs font-bold uppercase tracking-widest text-gray-400">{job.id}</span>
+                <span className="bg-black/50 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-gray-400">{job.id}</span>
               </div>
               
               <div className="space-y-2 mb-4">
                 <div className="text-xs font-bold text-gray-300 uppercase tracking-widest">{job.serviceName || 'Venta Tienda'}</div>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono text-gray-400">
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-gray-400">
                   <div>
                     <div className="uppercase text-gray-500 mb-0.5">Ingreso</div>
                     <div className="text-white">{new Date(job.entryDate).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</div>
@@ -201,17 +201,10 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
               <div className="flex justify-between items-center pt-3 border-t border-gray-800">
                 <div className="text-lg font-bold text-sw-green font-mono">${job.total?.toLocaleString('es-CL')}</div>
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); generateDeliveryVoucher(job); }}
-                    className="p-2 text-gray-400 hover:text-sw-blue transition-colors"
-                    title="Imprimir Voucher"
-                  >
-                    <Printer size={18} />
-                  </button>
-                  <span className="text-xs bg-gray-800 px-2 py-0.5 rounded font-bold uppercase tracking-widest text-gray-300">
+                  <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded font-bold uppercase tracking-widest text-gray-300">
                     {job.paymentMethod?.split(' ')[0]}
                   </span>
-                  <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{job.docType}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{job.docType}</span>
                 </div>
               </div>
             </div>
@@ -228,7 +221,7 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
                       key={col.id} 
                       value={col} 
                       as="th" 
-                      className="p-4 text-xs font-bold text-gray-500 uppercase tracking-widest cursor-grab active:cursor-grabbing hover:bg-white/5 transition-colors"
+                      className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest cursor-grab active:cursor-grabbing hover:bg-white/5 transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <GripVertical size={12} className="text-gray-700" />
@@ -236,7 +229,7 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
                       </div>
                     </Reorder.Item>
                   ))}
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-widest text-right">Acciones</th>
+                  <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right">Acciones</th>
                 </Reorder.Group>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
@@ -244,18 +237,18 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
                   <tr key={job.id} className="hover:bg-white/5 transition-colors group">
                     {columns.map((col: any) => (
                       <td key={col.id} className="p-4">
-                        {col.id === 'id' && <span className="text-xs font-mono text-gray-500">{job.id}</span>}
-                        {col.id === 'plate' && <span className="text-xl font-mono font-black text-sw-blue">{job.plate}</span>}
-                        {col.id === 'client' && <span className="text-sm font-bold text-white uppercase tracking-wide">{job.clientName || 'N/A'}</span>}
-                        {col.id === 'service' && <span className="text-sm text-gray-400 uppercase tracking-widest">{job.serviceName || 'Venta Tienda'}</span>}
+                        {col.id === 'id' && <span className="text-[10px] font-mono text-gray-500">{job.id}</span>}
+                        {col.id === 'plate' && <span className="text-lg font-mono font-black text-sw-blue">{job.plate}</span>}
+                        {col.id === 'client' && <span className="text-xs font-bold text-white uppercase tracking-wide">{job.clientName || 'N/A'}</span>}
+                        {col.id === 'service' && <span className="text-xs text-gray-400 uppercase tracking-widest">{job.serviceName || 'Venta Tienda'}</span>}
                         {col.id === 'entry' && (
-                          <div className="text-xs font-mono text-gray-500">
+                          <div className="text-[10px] font-mono text-gray-500">
                             <div className="text-white">{new Date(job.entryDate).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</div>
                             <div>{new Date(job.entryDate).toLocaleDateString('es-CL')}</div>
                           </div>
                         )}
                         {col.id === 'exit' && (
-                          <div className="text-xs font-mono text-gray-500">
+                          <div className="text-[10px] font-mono text-gray-500">
                             {job.exitDate ? (
                               <>
                                 <div className="text-white">{new Date(job.exitDate).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</div>
@@ -264,23 +257,15 @@ export const HistoryView = ({ jobs, shifts, showToast, setDetailModalJobId }: an
                             ) : '-'}
                           </div>
                         )}
-                        {col.id === 'total' && <span className="text-base font-mono font-bold text-sw-green">${job.total?.toLocaleString('es-CL')}</span>}
-                        {col.id === 'payment' && <span className="text-xs bg-gray-800 px-2 py-0.5 rounded font-bold text-gray-300">{job.paymentMethod?.split(' ')[0]}</span>}
-                        {col.id === 'doc' && <span className="text-xs text-gray-500 font-bold uppercase">{job.docType}</span>}
+                        {col.id === 'total' && <span className="text-sm font-mono font-bold text-sw-green">${job.total?.toLocaleString('es-CL')}</span>}
+                        {col.id === 'payment' && <span className="text-[10px] bg-gray-800 px-2 py-0.5 rounded font-bold text-gray-300">{job.paymentMethod?.split(' ')[0]}</span>}
+                        {col.id === 'doc' && <span className="text-[10px] text-gray-500 font-bold uppercase">{job.docType}</span>}
                       </td>
                     ))}
                     <td className="p-4 text-right">
                       <button 
-                        onClick={() => generateDeliveryVoucher(job)}
-                        className="p-2 text-gray-500 hover:text-sw-blue transition-colors"
-                        title="Imprimir Voucher"
-                      >
-                        <Printer size={18} />
-                      </button>
-                      <button 
                         onClick={() => setDetailModalJobId(job.id)}
                         className="p-2 text-gray-500 hover:text-sw-blue transition-colors"
-                        title="Ver Detalle"
                       >
                         <Eye size={18} />
                       </button>

@@ -9,14 +9,25 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
     start: new Date().toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
-  const [activeSubTab, setActiveSubTab] = useState<'ventas' | 'turnos' | 'tarifas' | 'productividad'>(initialSubTab || 'ventas');
+  const tabs = [
+    { id: 'ventas', label: 'Ventas y Finanzas', permission: 'view_reports', color: 'sw-blue' },
+    { id: 'turnos', label: 'Historial de Turnos', permission: 'view_reports', color: 'sw-yellow' },
+    { id: 'tarifas', label: 'Tarifario de servicios', permission: 'edit_pricing', color: 'white' }
+  ].filter(t => !t.permission || hasPermission(t.permission));
 
-  // Update activeSubTab when initialSubTab changes
+  const [activeSubTab, setActiveSubTab] = useState<'ventas' | 'turnos' | 'tarifas' | string>(initialSubTab || (tabs.length > 0 ? tabs[0].id : 'ventas'));
+
+  // Update activeSubTab when initialSubTab changes or permissions load
   React.useEffect(() => {
-    if (initialSubTab) {
-      setActiveSubTab(initialSubTab);
+    if (initialSubTab && initialSubTab !== 'productividad') {
+      const tabExists = tabs.some(t => t.id === initialSubTab);
+      if (tabExists) {
+        setActiveSubTab(initialSubTab);
+      }
+    } else if (tabs.length > 0 && !tabs.some(t => t.id === activeSubTab)) {
+      setActiveSubTab(tabs[0].id);
     }
-  }, [initialSubTab]);
+  }, [initialSubTab, tabs.length]);
 
   const reportData = useMemo(() => {
     const start = new Date(dateRange.start);
@@ -83,17 +94,27 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
       { Concepto: 'Rango de Reporte', Valor: `${dateRange.start} a ${dateRange.end}` },
       { Concepto: 'Total Vehículos Ingresados', Valor: reportData.jobsCount },
       { Concepto: 'Total Vehículos Entregados', Valor: reportData.deliveredCount },
-      { Concepto: 'Recaudación Total', Valor: reportData.revenue.total },
-      { Concepto: 'Ingresos Lavado', Valor: reportData.revenue.lavado },
+      { Concepto: '', Valor: '' },
+      { Concepto: '--- DESGLOSE DE INGRESOS ---', Valor: '' },
+      { Concepto: 'Ingresos Lavado (Bruto)', Valor: reportData.revenue.lavado },
       { Concepto: 'Ingresos Tienda', Valor: reportData.revenue.tienda },
       { Concepto: 'Ingresos Estacionamiento', Valor: reportData.revenue.parking },
       { Concepto: 'Total Descuentos Aplicados', Valor: reportData.revenue.descuento },
-      { Concepto: 'Pago Efectivo', Valor: reportData.revenue.efectivo },
-      { Concepto: 'Pago Tarjeta', Valor: reportData.revenue.tarjeta },
-      { Concepto: 'Pago Transferencia', Valor: reportData.revenue.transferencia },
-      { Concepto: 'Ventas a Crédito', Valor: reportData.revenue.credito },
-      { Concepto: 'Movimientos Caja (Ingresos)', Valor: reportData.cashFlow.income },
-      { Concepto: 'Movimientos Caja (Egresos)', Valor: reportData.cashFlow.expense }
+      { Concepto: 'Recaudación Neta Total', Valor: reportData.revenue.total },
+      { Concepto: '', Valor: '' },
+      { Concepto: '--- MEDIOS DE PAGO (Inc. $0) ---', Valor: '' },
+      { Concepto: '[SUMA] Efectivo', Valor: reportData.revenue.efectivo },
+      { Concepto: '[SUMA] Tarjeta', Valor: reportData.revenue.tarjeta },
+      { Concepto: '[SUMA] Transferencia', Valor: reportData.revenue.transferencia },
+      { Concepto: '[PENDIENTE] Ventas a Crédito', Valor: reportData.revenue.credito },
+      { Concepto: '', Valor: '' },
+      { Concepto: '--- MOVIMIENTOS EXTRAS CAJA ---', Valor: '' },
+      { Concepto: '[SUMA] Ingresos Manuales', Valor: reportData.cashFlow.income },
+      { Concepto: '[RESTA] Egresos o Retiros', Valor: reportData.cashFlow.expense },
+      { Concepto: '', Valor: '' },
+      { Concepto: '--- BALANCE FINAL ---', Valor: '' },
+      { Concepto: 'Total Sistema (Calculado para cuadratura)', Valor: reportData.revenue.efectivo + reportData.revenue.tarjeta + reportData.revenue.transferencia + reportData.cashFlow.income - reportData.cashFlow.expense },
+      { Concepto: 'Explicación del cálculo', Valor: 'Balance = (Ventas pagadas: Efectivo + Tarjeta + Transf) + (Ingresos manuales) - (Egresos manuales). Ventas a crédito excluidas.' }
     ];
 
     exportToExcel(`reporte_${dateRange.start}_${dateRange.end}.xlsx`, [...summary, { Concepto: '', Valor: '' }, ...data]);
@@ -120,34 +141,17 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
 
   return (
     <div className="space-y-6">
-      {!initialSubTab && (
-        <div className="flex border-b border-gray-800 overflow-x-auto custom-scrollbar">
+      <div className="flex border-b border-gray-800 overflow-x-auto custom-scrollbar">
+        {tabs.map(tab => (
           <button 
-            onClick={() => setActiveSubTab('ventas')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'ventas' ? 'text-sw-blue border-b-2 border-sw-blue bg-sw-blue/5' : 'text-gray-500 hover:text-gray-300'}`}
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === tab.id ? `text-${tab.color} border-b-2 border-${tab.color === 'white' ? 'white' : tab.color} bg-${tab.color === 'white' ? 'white' : tab.color}/5` : 'text-gray-500 hover:text-gray-300'}`}
           >
-            Ventas y Finanzas
+            {tab.label}
           </button>
-          <button 
-            onClick={() => setActiveSubTab('turnos')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'turnos' ? 'text-sw-yellow border-b-2 border-sw-yellow bg-sw-yellow/5' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            Turnos
-          </button>
-          <button 
-            onClick={() => setActiveSubTab('productividad')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'productividad' ? 'text-sw-green border-b-2 border-sw-green bg-sw-green/5' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            Productividad
-          </button>
-          <button 
-            onClick={() => setActiveSubTab('tarifas')}
-            className={`px-6 py-3 text-sm font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'tarifas' ? 'text-gray-300 border-b-2 border-white bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            Configuración
-          </button>
-        </div>
-      )}
+        ))}
+      </div>
 
       {activeSubTab === 'ventas' ? (
         <>
@@ -294,27 +298,6 @@ export const DailyReportView = ({ jobs, transactions, shifts, onShowZReport, ini
           currentUser={currentUser}
           showToast={showToast}
         />
-      ) : activeSubTab === 'productividad' ? (
-        <div className="panel-glass p-6 rounded-2xl border border-gray-800">
-          <h3 className="text-xl font-bold text-sw-green uppercase tracking-widest mb-6 flex items-center gap-2">
-            <TrendingUp size={24} /> Desempeño por Trabajador
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Object.entries(reportData.workerStats).map(([workerId, stats]: [any, any]) => (
-              <div key={workerId} className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                <div className="text-sm font-bold text-white uppercase mb-4 border-b border-gray-800 pb-2">{workerId}</div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-gray-500 uppercase">Lavados</span>
-                  <span className="text-lg font-mono font-black text-sw-blue">{stats.count}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-500 uppercase">Producción</span>
-                  <span className="text-lg font-mono font-black text-sw-green">${stats.total.toLocaleString('es-CL')}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       ) : (
         <PricingView 
           services={services} 

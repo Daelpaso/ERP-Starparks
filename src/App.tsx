@@ -22,12 +22,13 @@ import { CalendarView } from './components/CalendarView';
 import { AuthGuard } from './components/AuthGuard';
 import { PricingView, ConfigView, UsersView, ClientsView, InventoryView } from './components/AdminViews';
 import { JobDetailModal, QuickStoreModal, CheckoutModal, ClientDetailModal, ServiceModal, CategoryModal, UserDetailModal, UserCreateModal, InventoryItemModal } from './components/Modals';
-import { OpenShiftModal, CashMovementModal, CloseShiftModal, ZReportModal, ShiftHistoryView } from './components/ShiftManagement';
+import { OpenShiftModal, CashMovementModal, CloseShiftModal, ShiftHistoryView } from './components/ShiftManagement';
+import { HistoricalZReportModal } from './components/HistoricalZReportModal';
 
 // Firebase Imports
 import { 
   auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged,
-  collection, doc, setDoc, updateDoc, onSnapshot, query, getDoc,
+  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDoc,
   handleFirestoreError, OperationType
 } from './firebase';
 
@@ -574,14 +575,14 @@ export default function App() {
   }, [a11y]);
 
   const navItems = [
-    { id: 'pos', label: 'Punto de Venta', icon: Store, role: null },
-    { id: 'taller', label: 'Taller / Kanban', icon: Wrench, role: null },
-    { id: 'clientes', label: 'Clientes', icon: Users, role: null },
-    { id: 'calendario', label: 'Calendario', icon: Calendar, role: null },
-    { id: 'hist', label: 'Historial', icon: History, role: null },
-    { id: 'reportes', label: 'Reportes', icon: TrendingUp, role: 'Admin' },
-    { id: 'inventario', label: 'Inventario', icon: Package, role: 'Admin' },
-    { id: 'config', label: 'Configuración', icon: Settings, role: null },
+    { id: 'pos', label: 'Punto de Venta', icon: Store, permission: null },
+    { id: 'taller', label: 'Taller / Kanban', icon: Wrench, permission: null },
+    { id: 'clientes', label: 'Clientes', icon: Users, permission: null },
+    { id: 'calendario', label: 'Calendario', icon: Calendar, permission: null },
+    { id: 'hist', label: 'Historial', icon: History, permission: null },
+    { id: 'reportes', label: 'Reportes', icon: TrendingUp, permission: 'view_reports' },
+    { id: 'inventario', label: 'Inventario', icon: Package, permission: 'edit_inventory' },
+    { id: 'config', label: 'Tarifario de servicios', icon: Settings, permission: null },
   ];
 
   if (!isAuthReady) {
@@ -614,6 +615,25 @@ export default function App() {
       </>
     );
   }
+
+  const resetDatabase = async () => {
+    if (!window.confirm('¿Está ABSOLUTAMENTE SEGURO de querer eliminar todos los datos de clientes y vehículos? Esta acción es irreversible y reseteará el ERP para un nuevo inicio.')) return;
+    try {
+      showToast('Iniciando reseteo de órbita...', 'info');
+      // Delete Jobs
+      for (const job of jobs) {
+        await deleteDoc(doc(db, 'jobs', job.id));
+      }
+      // Delete Clients
+      for (const client of clients) {
+        await deleteDoc(doc(db, 'clients', client.id));
+      }
+      showToast('Base de datos purgada. Iniciando desde cero.', 'success');
+      window.location.reload();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'jobs/clients');
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col relative overflow-hidden">
@@ -707,7 +727,7 @@ export default function App() {
               {navItems.map((item) => {
                 const isConfigModule = ['boveda', 'tarifas', 'usuarios'].includes(item.id);
                 const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
-                const isAllowed = isSuperAdmin || (!isConfigModule && (!item.role || (currentUser && (currentUser.role === item.role || currentUser.role === 'Admin'))));
+                const isAllowed = isSuperAdmin || (!isConfigModule && (!item.permission || hasPermission(item.permission)));
                 
                 return (
                   <button
@@ -811,6 +831,7 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.2 }}
+              className="bg-black/20 rounded-3xl p-1 shadow-[0_0_80px_rgba(0,0,0,0.3)] min-h-full"
             >
               {activeTab === 'pos' && (
                 <AuthGuard currentUser={currentUser} hasPermission={hasPermission}>
@@ -836,7 +857,14 @@ export default function App() {
               )}
               {activeTab === 'clientes' && (
                 <AuthGuard currentUser={currentUser} hasPermission={hasPermission}>
-                  <ClientsView clients={clients} setClients={setClients} showToast={showToast} setClientModalId={setClientModalId} />
+                  <ClientsView 
+                    clients={clients} 
+                    setClients={setClients} 
+                    showToast={showToast} 
+                    setClientModalId={setClientModalId} 
+                    resetDatabase={resetDatabase}
+                    isAdmin={currentUser?.role === 'Admin'}
+                  />
                 </AuthGuard>
               )}
               {activeTab === 'calendario' && (
@@ -853,7 +881,7 @@ export default function App() {
               )}
               
               {activeTab === 'reportes' && (
-                <AuthGuard currentUser={currentUser} requiredRole="Admin" hasPermission={hasPermission}>
+                <AuthGuard currentUser={currentUser} requiredPermission="view_reports" hasPermission={hasPermission}>
                   <DailyReportView 
                     jobs={jobs} 
                     transactions={transactions} 
@@ -900,6 +928,7 @@ export default function App() {
                     hasPermission={hasPermission}
                     impersonatedUserId={impersonatedUserId}
                     realUserEmail={firebaseUser?.email}
+                    resetDatabase={resetDatabase}
                     setImpersonatedUserId={(id: string | null) => {
                       if (id) sessionStorage.setItem('impersonatedUserId', id);
                       else sessionStorage.removeItem('impersonatedUserId');
@@ -1077,7 +1106,7 @@ export default function App() {
         )}
 
         {showZReportModal && (
-          <ZReportModal key="z-report-modal" shift={showZReportModal} jobs={jobs} transactions={transactions} onClose={() => setShowZReportModal(null)} showToast={showToast} />
+          <HistoricalZReportModal key="z-report-modal" shift={showZReportModal} onClose={() => setShowZReportModal(null)} showToast={showToast} />
         )}
 
         {clientModalId && (
@@ -1096,6 +1125,7 @@ export default function App() {
             key="service-modal"
             serviceId={serviceModalId === 'new' ? null : serviceModalId}
             services={services}
+            jobs={jobs}
             onClose={() => setServiceModalId(null)}
             showToast={showToast}
             hasPermission={hasPermission}
@@ -1151,19 +1181,12 @@ export default function App() {
             key="user-create-modal"
             onClose={() => setShowUserCreateModal(false)}
             showToast={showToast}
-          />
-        )}
-
-        {serviceModalId && (
-          <ServiceModal 
-            key="service-modal"
-            serviceId={serviceModalId === 'new' ? null : serviceModalId}
-            services={services}
-            onClose={() => setServiceModalId(null)}
-            showToast={showToast}
+            currentUser={currentUser}
             hasPermission={hasPermission}
           />
         )}
+
+
 
         {categoryModalId && (
           <CategoryModal 

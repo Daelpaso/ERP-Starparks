@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Package, Plus, Trash2, Edit2, Save, X, DollarSign, UserPlus, Shield, Users, Download, TrendingUp, RefreshCcw, UserCheck, UserX, MessageCircle, Gift, Sparkles, AlertTriangle } from 'lucide-react';
 import { exportToExcel } from '../lib/utils';
-import { doc, updateDoc, deleteDoc, setDoc, db } from '../firebase';
+import { doc, updateDoc, deleteDoc, setDoc, db, handleFirestoreError, OperationType } from '../firebase';
 import { DailyReportView } from './DailyReportView';
 
 export const InventoryView = ({ rawMaterials, setRawMaterials, storeProducts, setStoreProducts, showToast, hasPermission, setInventoryModalId }: any) => {
@@ -166,9 +166,10 @@ export const CategoriesView = ({ categories, showToast, hasPermission, setCatego
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`¿Está seguro de que desea eliminar la categoría "${name}"?`)) return;
     try {
-      await deleteDoc(doc(db, 'categories', id));
+      await updateDoc(doc(db, 'categories', id), { isActive: false, active: false });
       showToast('Categoría eliminada', 'success');
-    } catch (e) {
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, 'categories');
       showToast('Error al eliminar categoría', 'error');
     }
   };
@@ -187,8 +188,12 @@ export const CategoriesView = ({ categories, showToast, hasPermission, setCatego
         )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((cat: any) => (
-          <div key={cat.id} className="bg-black/60 p-5 rounded-xl border border-gray-800 hover:border-sw-blue transition-all group">
+        {categories.filter((cat: any) => cat.isActive !== false && cat.active !== false).map((cat: any) => (
+          <div 
+            key={cat.id} 
+            onClick={() => setCategoryModalId(cat.id)}
+            className="bg-black/60 p-5 rounded-xl border border-gray-800 hover:border-sw-blue transition-all group cursor-pointer active:scale-[0.98]"
+          >
             <div className="flex justify-between items-center">
               <div>
                 <div className="text-lg font-bold text-white uppercase tracking-widest group-hover:text-sw-blue transition-colors">{cat.name}</div>
@@ -199,13 +204,7 @@ export const CategoriesView = ({ categories, showToast, hasPermission, setCatego
             {canEdit && (
               <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-800">
                 <button 
-                  onClick={() => setCategoryModalId(cat.id)}
-                  className="p-2 text-gray-500 hover:text-sw-blue transition-colors"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button 
-                  onClick={() => handleDelete(cat.id, cat.name)}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(cat.id, cat.name); }}
                   className="p-2 text-gray-500 hover:text-sw-red transition-colors"
                 >
                   <Trash2 size={16} />
@@ -225,9 +224,10 @@ export const PricingView = ({ services, setServices, storeProducts, setStoreProd
   const handleDeleteService = async (id: string, name: string) => {
     if (!window.confirm(`¿Está seguro de que desea eliminar el servicio "${name}"?`)) return;
     try {
-      await deleteDoc(doc(db, 'services', id));
+      await updateDoc(doc(db, 'services', id), { isActive: false, active: false });
       showToast('Servicio eliminado', 'success');
-    } catch (e) {
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, 'services');
       showToast('Error al eliminar servicio', 'error');
     }
   };
@@ -247,8 +247,12 @@ export const PricingView = ({ services, setServices, storeProducts, setStoreProd
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {services.map((srv: any) => (
-            <div key={srv.id} className="bg-black/60 p-5 rounded-xl border border-gray-800 hover:border-sw-green transition-all group">
+          {services.filter((srv: any) => srv.isActive !== false && srv.active !== false).map((srv: any) => (
+            <div 
+              key={srv.id} 
+              onClick={() => setServiceModalId(srv.id)}
+              className="bg-black/60 p-5 rounded-xl border border-gray-800 hover:border-sw-green transition-all group cursor-pointer active:scale-[0.98]"
+            >
               <div className="flex justify-between items-start mb-4">
                 <div className="text-lg font-bold text-white uppercase tracking-widest group-hover:text-sw-green transition-colors">{srv.name}</div>
                 <div className="text-2xl font-mono font-black text-sw-green">${srv.basePrice.toLocaleString('es-CL')}</div>
@@ -265,13 +269,7 @@ export const PricingView = ({ services, setServices, storeProducts, setStoreProd
               {canEdit && (
                 <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-800">
                   <button 
-                    onClick={() => setServiceModalId(srv.id)}
-                    className="p-2 text-gray-500 hover:text-sw-blue transition-colors"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteService(srv.id, srv.name)}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteService(srv.id, srv.name); }}
                     className="p-2 text-gray-500 hover:text-sw-red transition-colors"
                   >
                     <Trash2 size={16} />
@@ -321,7 +319,7 @@ export const UsersView = ({ users, setUsers, showToast, currentUser, setUserModa
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {users.map((user: any) => (
+        {users.filter((user: any) => user.isActive !== false && user.active !== false).map((user: any) => (
           <div 
             key={user.id} 
             onClick={() => setUserModalId(user.id)}
@@ -347,7 +345,7 @@ export const UsersView = ({ users, setUsers, showToast, currentUser, setUserModa
 
 
 
-export const ClientsView = ({ clients, setClients, showToast, setClientModalId }: any) => {
+export const ClientsView = ({ clients, setClients, showToast, setClientModalId, resetDatabase, isAdmin }: any) => {
   const handleExport = () => {
     const data = clients.map((c: any) => ({
       ID: c.id,
@@ -362,13 +360,40 @@ export const ClientsView = ({ clients, setClients, showToast, setClientModalId }
     showToast('Clientes exportados', 'success');
   };
 
+  const handleDeleteClient = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    if (!window.confirm(`¿Está seguro de archivar/eliminar al cliente "${name}"? Su historial se mantendrá oculto.`)) return;
+    try {
+      await updateDoc(doc(db, 'clients', id), {
+        isActive: false,
+        active: false,
+        archivedAt: Date.now()
+      });
+      showToast(`Cliente "${name}" archivado exitosamente`, 'success');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'clients');
+      showToast('Error al archivar cliente', 'error');
+    }
+  };
+
   return (
     <div className="panel-glass p-6 rounded-xl border-t-4 border-sw-yellow">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <h3 className="text-2xl font-bold sw-title-font text-sw-yellow tracking-widest flex items-center gap-3"><Users size={28} /> BASE DE DATOS DE CLIENTES</h3>
         <div className="flex items-center gap-4 w-full sm:w-auto">
           <div className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-black/50 px-3 py-1 rounded border border-gray-800">{clients.length} REGISTROS</div>
-          <button onClick={handleExport} className="btn-gold p-2 rounded-lg" title="Exportar Excel"><Download size={20} /></button>
+          <div className="flex gap-2">
+            <button onClick={handleExport} className="btn-gold p-2 rounded-lg" title="Exportar Excel"><Download size={20} /></button>
+            {isAdmin && clients.length > 0 && (
+              <button 
+                onClick={resetDatabase} 
+                className="p-2 rounded-lg bg-sw-red/10 border border-sw-red/30 text-sw-red hover:bg-sw-red hover:text-white transition-all" 
+                title="Purgar Base de Datos (Solo Admin)"
+              >
+                <Trash2 size={20} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <div className="overflow-x-auto custom-scrollbar">
@@ -383,7 +408,7 @@ export const ClientsView = ({ clients, setClients, showToast, setClientModalId }
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/50">
-            {clients.map((cli: any) => (
+            {clients.filter((cli: any) => cli.isActive !== false && cli.active !== false).map((cli: any) => (
               <tr key={cli.id} className="hover:bg-white/5 transition-colors cursor-pointer" onClick={() => setClientModalId(cli.id)}>
                 <td className="p-4 font-mono text-xl font-black text-sw-blue">{cli.plate}</td>
                 <td className="p-4 font-bold text-white uppercase tracking-wide">{cli.name}</td>
@@ -419,6 +444,15 @@ export const ClientsView = ({ clients, setClients, showToast, setClientModalId }
                     <button onClick={(e) => { e.stopPropagation(); setClientModalId(cli.id); }} className="p-2 text-gray-500 hover:text-sw-blue transition-colors rounded-lg hover:bg-sw-blue/10 border border-transparent hover:border-sw-blue/30" title="Editar / Ver Detalle">
                       <Edit2 size={18} />
                     </button>
+                    {isAdmin && (
+                      <button 
+                        onClick={(e) => handleDeleteClient(e, cli.id, cli.name)} 
+                        className="p-2 text-gray-500 hover:text-sw-red transition-colors rounded-lg hover:bg-sw-red/10 border border-transparent hover:border-sw-red/30" 
+                        title="Eliminar Cliente"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -436,7 +470,7 @@ export const ConfigView = ({
   setUserModalId, setShowUserCreateModal,
   hasPermission,
   impersonatedUserId, setImpersonatedUserId,
-  realUserEmail
+  realUserEmail, resetDatabase
 }: any) => {
   const [activeTab, setActiveTab] = useState('general');
   const isDeveloper = realUserEmail === 'daelpaso.digital@gmail.com';
@@ -615,24 +649,6 @@ export const ConfigView = ({
               <div className="p-4 bg-black/20 rounded-xl border border-gray-800 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-bold text-white uppercase tracking-widest">Sincronización Cloud (Google Drive)</p>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">Respaldo automático de base de datos y reportes</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[8px] font-bold text-sw-red uppercase bg-sw-red/10 px-2 py-0.5 rounded border border-sw-red/30">Requiere Configuración</span>
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-sw-blue/5 border border-sw-blue/20 rounded-lg">
-                  <p className="text-[10px] text-sw-blue font-bold uppercase tracking-widest leading-relaxed">
-                    Para habilitar el acceso a la base de datos vía Google Drive, asegúrese de configurar las credenciales OAuth (Client ID y Secret) en el panel de Secretos de AI Studio.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-black/20 rounded-xl border border-gray-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
                     <p className="text-sm font-bold text-white uppercase tracking-widest">Notificaciones por Correo</p>
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest">Envío automático de Reporte Z al cerrar turno</p>
                   </div>
@@ -653,17 +669,26 @@ export const ConfigView = ({
                       className="w-full bg-black/40 border border-gray-800 rounded-lg p-2 text-xs text-gray-400 font-mono"
                     />
                   </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Copia a (CC)</label>
-                    <input 
-                      type="email" 
-                      value={emailConfig.copyEmail}
-                      readOnly
-                      className="w-full bg-black/40 border border-gray-800 rounded-lg p-2 text-xs text-gray-400 font-mono"
-                    />
-                  </div>
                 </div>
               </div>
+
+              {isSuperAdmin && (
+                <div className="p-6 bg-sw-red/5 border border-sw-red/20 rounded-xl space-y-4">
+                  <div className="flex items-center gap-3 text-sw-red mb-2">
+                    <AlertTriangle size={20} />
+                    <h4 className="text-xs font-bold uppercase tracking-widest">Zona de Peligro</h4>
+                  </div>
+                  <p className="text-[10px] text-gray-400 uppercase leading-relaxed">
+                    Estas acciones eliminan datos permanentes. Úselas solo si desea limpiar la base de datos para comenzar una nueva vigencia.
+                  </p>
+                  <button 
+                    onClick={resetDatabase}
+                    className="w-full py-4 bg-sw-red/20 border border-sw-red text-sw-red font-black uppercase tracking-[0.2em] text-[10px] rounded-xl hover:bg-sw-red hover:text-white transition-all shadow-[0_0_20px_rgba(231,76,60,0.2)]"
+                  >
+                    Reseteo de Fábrica (Clientes y Vehículos)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

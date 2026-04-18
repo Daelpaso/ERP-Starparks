@@ -46,10 +46,7 @@ export const INITIAL_STORE_PRODUCTS = [
   { id: 'sp_12', name: 'Café Instantáneo', price: 800, icon: '☕', stock: 40 },
 ];
 
-export const INITIAL_CLIENTS = [
-  { id: 'cli_1', plate: 'ABCD12', name: 'Juan Pérez', phone: '+56 9 1234 5678', email: 'juan.perez@email.com', date: Date.now() - 864000000, visits: 9 },
-  { id: 'cli_2', plate: 'XX9988', name: 'María Silva', phone: '+56 9 8765 4321', email: '', date: Date.now() - 432000000, visits: 4 },
-];
+export const INITIAL_CLIENTS = [];
 
 export const PAYMENT_METHODS = ['Efectivo', 'Tarjeta (Débito/Crédito)', 'Transferencia'];
 export const DOC_TYPES = ['Boleta', 'Factura', 'Comprobante interno'];

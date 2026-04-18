@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShoppingCart, FileText, Clock, Trash2, CheckCircle2, ShieldCheck, AlertTriangle, Edit2, Shield, ChevronLeft, UserPlus, Eye, EyeOff, MessageCircle, MessageSquare, Printer, DollarSign, Package, Plus } from 'lucide-react';
+import { X, ShoppingCart, FileText, Clock, Trash2, CheckCircle2, ShieldCheck, AlertTriangle, Edit2, Shield, ChevronLeft, UserPlus, Eye, EyeOff, MessageCircle, MessageSquare, Printer, DollarSign, Package, Plus, Sparkles } from 'lucide-react';
 import { calculateParkingTimeAndFee, generateDeliveryVoucher } from '../lib/utils';
 import { PAYMENT_METHODS, DOC_TYPES } from '../lib/constants';
-import { doc, updateDoc, setDoc, deleteDoc, db, increment } from '../firebase';
+import { doc, updateDoc, setDoc, deleteDoc, db, increment, handleFirestoreError, OperationType } from '../firebase';
 
 export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStoreModalJobId, addTimelineEvent, hasPermission }: any) => {
   const job = jobs.find((j: any) => j.id === jobId);
@@ -32,10 +32,10 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
       return;
     }
     try {
-      await deleteDoc(doc(db, 'jobs', jobId));
+      await updateDoc(doc(db, 'jobs', jobId), { isActive: false, active: false });
       onClose();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, 'jobs');
     }
   };
 
@@ -588,6 +588,22 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
     setHasUnsavedChanges(true);
   };
 
+  const handleArchiveUser = async () => {
+    if (!window.confirm(`¿Estás seguro de archivar/desactivar a ${user.name}?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        isActive: false,
+        active: false,
+        archivedAt: Date.now()
+      });
+      showToast('Usuario archivado (eliminación lógica)', 'success');
+      onClose();
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.UPDATE, 'users');
+      showToast('Error al archivar usuario', 'error');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black z-[200] flex flex-col overflow-hidden">
       {/* Header */}
@@ -601,6 +617,14 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
         </button>
         
         <div className="flex gap-4">
+          {isSuperAdmin && !isEditing && (
+            <button 
+              onClick={handleArchiveUser}
+              className="px-6 py-3 rounded-xl font-bold uppercase tracking-widest flex items-center gap-3 transition-all bg-sw-red/10 border border-sw-red/30 text-sw-red hover:bg-sw-red hover:text-white"
+            >
+              <Trash2 size={20} /> ARCHIVAR
+            </button>
+          )}
           {isSuperAdmin && (
             <button 
               onClick={handleEditClick}
@@ -964,7 +988,7 @@ export const CredentialModal = ({ user, onClose, onSave, showToast }: any) => {
   );
 };
 
-export const UserCreateModal = ({ onClose, showToast }: any) => {
+export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission }: any) => {
   const [formData, setFormData] = useState({
     name: '',
     rut: '',
@@ -975,6 +999,13 @@ export const UserCreateModal = ({ onClose, showToast }: any) => {
   });
 
   const handleSave = async () => {
+    // Validate permission
+    const isSuperAdmin = currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com';
+    if (!isSuperAdmin && !hasPermission('edit_users')) {
+      showToast('No tienes permisos para crear usuarios', 'error');
+      return;
+    }
+
     if (!formData.name || !formData.email || !formData.rut) {
       showToast('Nombre, Email y RUT son obligatorios', 'error');
       return;
@@ -986,13 +1017,15 @@ export const UserCreateModal = ({ onClose, showToast }: any) => {
         ...formData,
         id,
         active: true,
+        isActive: true,
         permissions: {},
         createdAt: Date.now()
       });
       showToast('Nuevo usuario reclutado con éxito', 'success');
       onClose();
-    } catch (e) {
-      showToast('Error al reclutar usuario', 'error');
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.CREATE, 'users');
+      showToast(e.message || 'Error al reclutar usuario', 'error');
     }
   };
 
@@ -1079,13 +1112,25 @@ export const UserCreateModal = ({ onClose, showToast }: any) => {
   );
 };
 
-export const ServiceModal = ({ serviceId, services, onClose, showToast, hasPermission }: any) => {
+export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, hasPermission }: any) => {
   const service = services.find((s: any) => s.id === serviceId);
   const [formData, setFormData] = useState({
     name: service?.name || '',
     basePrice: service?.basePrice || 0,
-    recipe: service?.recipe || []
+    recipe: service?.recipe || [],
+    estimatedCost: service?.estimatedCost || 0
   });
+
+  const netPrice = Math.round(formData.basePrice / 1.19);
+  const iva = formData.basePrice - netPrice;
+  const utility = formData.basePrice - formData.estimatedCost;
+
+  const history = React.useMemo(() => {
+    if (!serviceId) return [];
+    return (jobs || []).filter((j: any) => (j.serviceId === serviceId || j.serviceName === service?.name) && j.status === 'Entregado')
+      .sort((a: any, b: any) => b.entryDate - a.entryDate)
+      .slice(0, 5);
+  }, [jobs, serviceId, service?.name]);
 
   if (!hasPermission('edit_pricing')) return null;
 
@@ -1109,37 +1154,101 @@ export const ServiceModal = ({ serviceId, services, onClose, showToast, hasPermi
   };
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4 backdrop-blur-md" onClick={onClose}>
-      <div className="panel-glass rounded-2xl w-full max-w-md border border-sw-green/30 shadow-[0_0_50px_rgba(46,204,113,0.15)] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6 border-b border-gray-800 bg-sw-green/5 flex justify-between items-center">
-          <h2 className="text-xl font-bold sw-title-font text-sw-green tracking-widest uppercase">
-            {serviceId ? 'EDITAR SERVICIO' : 'NUEVO SERVICIO'}
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-sw-red transition-colors"><X size={24} /></button>
+    <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-4 backdrop-blur-xl" onClick={onClose}>
+      <div className="panel-glass rounded-3xl w-full max-w-2xl border border-sw-green/30 shadow-[0_0_80px_rgba(46,204,113,0.15)] flex flex-col max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-8 border-b border-gray-800 bg-sw-green/5 flex justify-between items-center text-sw-green">
+          <div className="flex items-center gap-4">
+            <Sparkles size={32} />
+            <div>
+              <h2 className="text-2xl font-black sw-title-font tracking-widest uppercase">
+                {serviceId ? 'Detalle de Servicio' : 'Nuevo Servicio'}
+              </h2>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-white">{formData.name || 'Personalizar Parámetros'}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-sw-red transition-colors"><X size={32} /></button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre del Servicio</label>
-            <input 
-              type="text" 
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full bg-black/40 border border-gray-800 rounded-lg p-3 text-white focus:border-sw-green outline-none"
-              placeholder="Ej: Lavado de Motor"
-            />
+
+        <div className="p-8 overflow-y-auto custom-scrollbar space-y-8 bg-black/40">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Configuración Base</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre del Servicio</label>
+                  <input 
+                    type="text" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    className="w-full bg-black/40 border border-gray-800 rounded-xl p-4 text-white font-bold focus:border-sw-green outline-none"
+                    placeholder="Ej: Lavado de Motor"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 text-sw-green">Precio de Venta Final (IVA Incl.)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-mono">$</span>
+                    <input 
+                      type="number" 
+                      value={formData.basePrice}
+                      onChange={(e) => setFormData({...formData, basePrice: Number(e.target.value)})}
+                      className="w-full bg-black/40 border border-gray-800 rounded-xl py-4 pl-10 pr-4 text-2xl font-mono font-black text-white focus:border-sw-green outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Desglose Tributario y Utilidad</h3>
+              <div className="panel-glass rounded-2xl border border-gray-800 p-6 space-y-4 shadow-inner">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-gray-500">Precio Neto:</span>
+                  <span className="text-white">${netPrice.toLocaleString('es-CL')}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-gray-500">IVA (19%):</span>
+                  <span className="text-white">${iva.toLocaleString('es-CL')}</span>
+                </div>
+                <div className="pt-4 border-t border-gray-800 space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Costo Estimado (Suministros + MO)</label>
+                    <input 
+                      type="number" 
+                      value={formData.estimatedCost}
+                      onChange={(e) => setFormData({...formData, estimatedCost: Number(e.target.value)})}
+                      className="w-full bg-black/20 border border-gray-800 rounded-lg p-2 text-sm text-sw-red font-mono outline-none focus:border-sw-red"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-sw-green/5 rounded-xl border border-sw-green/20">
+                    <span className="text-[10px] font-bold text-sw-green uppercase tracking-widest">Utilidad Bruta</span>
+                    <span className="text-xl font-mono font-black text-sw-green">${utility.toLocaleString('es-CL')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Precio Base (CLP)</label>
-            <input 
-              type="number" 
-              value={formData.basePrice}
-              onChange={(e) => setFormData({...formData, basePrice: Number(e.target.value)})}
-              className="w-full bg-black/40 border border-gray-800 rounded-lg p-3 text-white font-mono focus:border-sw-green outline-none"
-            />
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Historial Reciente de Ventas</h3>
+            <div className="space-y-2">
+              {history.length > 0 ? history.map((h: any) => (
+                <div key={h.id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-gray-800">
+                  <div className="flex gap-4 items-center">
+                    <span className="font-mono text-sw-blue text-xs">{h.clientPlate}</span>
+                    <span className="text-[10px] text-gray-500">{new Date(h.entryDate).toLocaleDateString()}</span>
+                  </div>
+                  <span className="font-mono font-bold text-sw-green text-sm">${h.total.toLocaleString('es-CL')}</span>
+                </div>
+              )) : (
+                <div className="text-center p-4 bg-black/10 border border-dashed border-gray-800 rounded-xl text-gray-600 text-[10px] font-bold uppercase tracking-widest">Sin registros de venta entregados</div>
+              )}
+            </div>
           </div>
+
           <div className="pt-4">
-            <button onClick={handleSave} className="w-full btn-yoda py-4 rounded-xl font-bold uppercase text-lg tracking-widest flex justify-center items-center gap-3">
-              <ShieldCheck size={24} /> GUARDAR SERVICIO
+            <button onClick={handleSave} className="w-full btn-yoda py-5 rounded-2xl font-black uppercase text-xl tracking-[0.2em] flex justify-center items-center gap-4 shadow-[0_0_30px_rgba(46,204,113,0.3)] hover:scale-[1.02] transition-all active:scale-95">
+              <ShieldCheck size={28} /> GUARDAR PARÁMETROS
             </button>
           </div>
         </div>
@@ -1308,7 +1417,6 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
             <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-gray-500"><span>Patente</span><span className="text-sw-blue font-mono text-xl">{job.plate}</span></div>
             <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-gray-500"><span>Servicio</span><span className="text-white">{job.serviceName || 'Lavado'}</span></div>
             <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-gray-500"><span>Consumo Tienda</span><span className="text-white">${job.storeTotal.toLocaleString('es-CL')}</span></div>
-            {extraFee > 0 && <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-sw-red"><span>Multa Parking ({extraMins}m)</span><span>+${extraFee.toLocaleString('es-CL')}</span></div>}
             
             <div className="pt-4 border-t border-gray-800 space-y-4">
               <div className="flex justify-between items-center">
@@ -1346,9 +1454,19 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
               )}
             </div>
 
-            <div className="pt-4 border-t border-gray-800 flex justify-between items-end">
-              <span className="text-sm font-bold uppercase tracking-widest text-gray-400">TOTAL A PAGAR</span>
-              <span className="text-4xl font-mono font-black text-sw-green drop-shadow-[0_0_10px_rgba(46,204,113,0.3)]">${finalTotal.toLocaleString('es-CL')}</span>
+            <div className="pt-4 border-t border-gray-800 space-y-2">
+              <div className="flex justify-between items-center text-xs text-gray-400">
+                <span>Subtotal (Neto):</span>
+                <span>${Math.round(finalTotal / 1.19).toLocaleString('es-CL')}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-gray-400">
+                <span>IVA (19%):</span>
+                <span>${(finalTotal - Math.round(finalTotal / 1.19)).toLocaleString('es-CL')}</span>
+              </div>
+              <div className="flex justify-between items-end pt-2">
+                <span className="text-sm font-bold uppercase tracking-widest text-gray-400">TOTAL A PAGAR</span>
+                <span className="text-4xl font-mono font-black text-sw-green drop-shadow-[0_0_10px_rgba(46,204,113,0.3)]">${finalTotal.toLocaleString('es-CL')}</span>
+              </div>
             </div>
           </div>
 
@@ -1451,10 +1569,12 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
       const pinPrompt = window.prompt('Ingrese PIN de Administrador (1124) para eliminar:');
       if (pinPrompt === '1124') {
         try {
-          await deleteDoc(doc(db, type === 'raw' ? 'rawMaterials' : 'storeProducts', item.id));
+          const collectionName = type === 'raw' ? 'rawMaterials' : 'storeProducts';
+          await updateDoc(doc(db, collectionName, item.id), { isActive: false, active: false });
           showToast('Item eliminado', 'success');
           onClose();
-        } catch (e) {
+        } catch (e: any) {
+          handleFirestoreError(e, OperationType.UPDATE, type === 'raw' ? 'rawMaterials' : 'storeProducts');
           showToast('Error al eliminar', 'error');
         }
       } else if (pinPrompt !== null) {

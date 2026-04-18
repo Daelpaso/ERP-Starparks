@@ -1,6 +1,4 @@
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 export const validarPatenteChilena = (patente: string) => {
   if (!patente) return false;
@@ -134,162 +132,31 @@ export const sendShiftEmail = async (type: 'start' | 'end', shift: any, summary?
   return new Promise((resolve) => setTimeout(resolve, 1500));
 };
 
-export const exportToPDF = (title: string, headers: string[], rows: any[][], summaryData?: {label: string, value: string}[]) => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
+export const calculateShiftStats = (shift: any, jobs: any[], transactions: any[]) => {
+  const shiftJobs = jobs.filter((j: any) => j.shiftId === shift.id && j.status === 'Entregado');
+  const shiftTxs = transactions.filter((t: any) => t.shiftId === shift.id);
 
-  // Header
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('STARPARKS', 14, 20);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Carwash Pro V1', 14, 25);
+  const systemJobsTotal = shiftJobs.reduce((acc: number, j: any) => acc + (j.total || 0), 0);
+  const txIncome = shiftTxs.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + t.amount, 0);
+  const txExpense = shiftTxs.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + t.amount, 0);
 
-  // Title
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text(title, 14, 35);
-
-  // Date
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, 14, 41);
-
-  let startY = 48;
-
-  // Summary table
-  if (summaryData && summaryData.length > 0) {
-    autoTable(doc, {
-      startY,
-      head: [['Concepto', 'Valor']],
-      body: summaryData.map(s => [s.label, s.value]),
-      theme: 'grid',
-      headStyles: { fillColor: [0, 168, 255], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-      margin: { left: 14, right: 14 },
-    });
-    startY = (doc as any).lastAutoTable.finalY + 10;
-  }
-
-  // Detail table
-  if (rows.length > 0) {
-    autoTable(doc, {
-      startY,
-      head: [headers],
-      body: rows,
-      theme: 'striped',
-      headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: 'bold', fontSize: 7 },
-      bodyStyles: { fontSize: 7 },
-      alternateRowStyles: { fillColor: [248, 248, 248] },
-      margin: { left: 14, right: 14 },
-    });
-  }
-
-  // Footer
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, doc.internal.pageSize.getHeight() - 10);
-    doc.text('STARPARKS — Documento generado automáticamente', 14, doc.internal.pageSize.getHeight() - 10);
-  }
-
-  doc.save(`${title.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
+  const systemTotal = (shift.initialCash || 0) + systemJobsTotal + txIncome - txExpense;
+  const declaredTotal = (shift.declaredCash || 0) + (shift.declaredCards || 0) + (shift.declaredTransfers || 0) + (shift.declaredCredit || 0);
+  
+  return { 
+    systemTotal, 
+    declaredTotal, 
+    diff: declaredTotal - systemTotal,
+    jobsTotal: systemJobsTotal,
+    incomesTotal: txIncome,
+    expensesTotal: txExpense
+  };
 };
 
-export const generateDeliveryVoucher = (job: any) => {
-  const doc = new jsPDF({
-    unit: 'mm',
-    format: [80, 200] // Thermal printer format
-  });
-
-  const width = 80;
-  let y = 10;
-
-  // Company Header
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('STARPARKS', width / 2, y, { align: 'center' });
-  y += 5;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('CARWASH PRO & PARKING', width / 2, y, { align: 'center' });
-  y += 4;
-  doc.text('Voucher de Entrega', width / 2, y, { align: 'center' });
-  y += 6;
-
-  doc.setLineWidth(0.2);
-  doc.line(5, y, 75, y);
-  y += 6;
-
-  // Vehicle Info
-  doc.setFont('helvetica', 'bold');
-  doc.text('VEHÍCULO:', 5, y);
-  y += 4;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(14);
-  doc.text(job.plate, 5, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.text(`${job.vehicleModel || ''} ${job.vehicleColor || ''}`, 5, y);
-  y += 8;
-
-  // Service Info
-  doc.setFont('helvetica', 'bold');
-  doc.text('DETALLE DEL SERVICIO:', 5, y);
-  y += 5;
-  doc.setFont('helvetica', 'normal');
-  doc.text(job.serviceName || 'Lavado', 5, y);
-  doc.text(`$${job.serviceTotal?.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
-  y += 5;
-
-  if (job.storeTotal > 0) {
-    doc.text('Consumos Tienda', 5, y);
-    doc.text(`$${job.storeTotal.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
-    y += 5;
-  }
-
-  if (job.parkingFee > 0) {
-    doc.text(`Multa Parking (${job.parkingMins} min)`, 5, y);
-    doc.text(`$${job.parkingFee.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
-    y += 5;
-  }
-
-  if (job.discount > 0) {
-    doc.text('Descuento', 5, y);
-    doc.text(`-$${job.discount.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
-    y += 5;
-  }
-
-  y += 3;
-  doc.line(5, y, 75, y);
-  y += 6;
-
-  // Total
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL:', 5, y);
-  doc.text(`$${job.total?.toLocaleString('es-CL')}`, 75, y, { align: 'right' });
-  y += 8;
-
-  // Footer / Metadata
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Ingreso: ${new Date(job.entryDate).toLocaleString('es-CL')}`, 5, y);
-  y += 4;
-  doc.text(`Entrega: ${new Date(job.exitDate || Date.now()).toLocaleString('es-CL')}`, 5, y);
-  y += 4;
-  doc.text(`Pago: ${job.paymentMethod || 'N/A'} - ${job.docType || 'N/A'}`, 5, y);
-  y += 8;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('¡GRACIAS POR SU PREFERENCIA!', width / 2, y, { align: 'center' });
-  y += 4;
-  doc.text('www.starparkschile.cl', width / 2, y, { align: 'center' });
-
-  doc.save(`voucher_${job.plate}_${Date.now()}.pdf`);
+export const sendSMS = async (phone: string, message: string) => {
+  // Integration point for SMS API (Twilio, AWS SNS, etc.)
+  console.log(`[SMS INTEGRATION] Target: ${phone} | Content: ${message}`);
+  
+  // Simulation of successful delivery
+  return new Promise((resolve) => setTimeout(resolve, 1200));
 };
-

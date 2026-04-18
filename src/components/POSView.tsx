@@ -375,15 +375,15 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
             {/* ── Hora de Retiro ── */}
             <div className="p-5">
               <label className="text-sm font-bold uppercase tracking-[0.15em] text-gray-400 mb-3 block">Hora de Retiro Estimada (Opcional)</label>
-              <div className="flex flex-col lg:flex-row gap-4 items-start">
-                <div className="grid grid-cols-2 gap-2 flex-1 w-full">
+              <div className="flex flex-col lg:flex-row gap-4 items-start pb-5">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 flex-1 w-full">
                   {[
                     { val: '', label: 'Sin hora' },
                     { val: '1h', label: '+1 hora' },
                     { val: '2h', label: '+2 horas' },
                     { val: '5h', label: '+5 horas' },
                     { val: '18:00', label: '18:00 hrs' },
-                    { val: 'custom', label: 'Personalizada' },
+                    { val: 'custom', label: 'Elegir' },
                   ].map(opt => (
                     <button
                       key={opt.val}
@@ -393,7 +393,7 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
                         else if (opt.val === '18:00') setCustomPickupTime('18:00');
                         else setCustomPickupTime(''); 
                       }}
-                      className={`py-4 rounded-xl text-sm font-bold uppercase tracking-wider border transition-all ${pickupMode === opt.val ? 'bg-sw-yellow/15 border-sw-yellow text-sw-yellow' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600'}`}
+                      className={`py-4 rounded-xl text-xs lg:text-sm font-bold uppercase tracking-wider border transition-all ${pickupMode === opt.val ? 'bg-sw-yellow/15 border-sw-yellow text-sw-yellow' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600'}`}
                     >{opt.label}</button>
                   ))}
                 </div>
@@ -434,18 +434,20 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
 
             {/* Quick Actions (Add Product / Add Discount) */}
             {!showDiscountPanel ? (
-              <div className="grid grid-cols-2 gap-3 mb-2">
+              <div className="grid grid-cols-2 gap-3 mb-2 flex-shrink-0">
                 <button
                   onClick={() => setPosTab('tienda')}
-                  className="py-5 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-green hover:border-sw-green/40 hover:bg-sw-green/5 transition-all text-sm font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-2"
+                  className="py-6 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-green hover:border-sw-green/40 hover:bg-sw-green/5 transition-all text-xs lg:text-sm font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-2"
                 >
-                  <ShoppingCart size={24} /> Agregar Producto
+                  <ShoppingCart size={24} className="flex-shrink-0" />
+                  <span className="text-center">Producto</span>
                 </button>
                 <button
                   onClick={() => setShowDiscountPanel(true)}
-                  className="py-5 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-blue hover:border-sw-blue/40 hover:bg-sw-blue/5 transition-all text-sm font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-2"
+                  className="py-6 rounded-xl border border-dashed border-gray-700 text-gray-400 hover:text-sw-blue hover:border-sw-blue/40 hover:bg-sw-blue/5 transition-all text-xs lg:text-sm font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-2"
                 >
-                  <Plus size={24} /> Descuento Especial
+                  <Plus size={24} className="flex-shrink-0" /> 
+                  <span className="text-center">Descuento</span>
                 </button>
               </div>
             ) : (
@@ -475,35 +477,46 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
             )}
 
             {/* Total Card — compacto */}
-            <div className="panel-glass rounded-2xl p-5 border border-gray-800">
-              <div className="text-sm font-bold uppercase tracking-[0.15em] text-gray-500 mb-1 flex items-center gap-2">
-                <Sparkles size={14} className="text-sw-yellow" /> Total Estimado
-              </div>
-              <div className="text-4xl font-black text-sw-green font-mono tracking-tight">
-                ${finalTotal.toLocaleString('es-CL')}
-              </div>
-
-              <div className="mt-3 space-y-1.5">
-                {selectedServiceObj && (
-                  <div className="flex justify-between items-center text-base text-gray-400">
-                    <span>Duración estimada</span>
-                    <span className="font-mono font-bold text-gray-200">~{selectedServiceObj.estimatedDuration || '?'} min</span>
+            <div className="panel-glass rounded-2xl p-5 border border-gray-800 flex-1 flex flex-col justify-end">
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between items-center text-sm text-gray-400 font-bold uppercase tracking-widest">
+                  <span>Subtotal</span>
+                  <span className="font-mono text-white">${Math.max(0, serviceBase + addonTotal).toLocaleString('es-CL')}</span>
+                </div>
+                {discountApplied && (
+                  <div className="flex justify-between items-center text-sm text-sw-yellow font-bold uppercase tracking-widest">
+                    <span>Descuento</span>
+                    <span className="font-mono">-${discountAmount.toLocaleString('es-CL')}</span>
                   </div>
                 )}
                 {isFreeWash && (
-                  <div className="bg-sw-green/20 border border-sw-green text-sw-green text-sm font-bold px-4 py-3 rounded-xl flex items-center gap-2 animate-pulse shadow-[0_0_20px_rgba(46,204,113,0.3)]">
-                    <CheckCircle2 size={20} /> ¡LAVADO GRATIS! (Beneficio 6+1)
+                  <div className="flex justify-between items-center text-sm text-sw-green font-bold uppercase tracking-widest">
+                    <span>Lavado Gratis (Visita 7)</span>
+                    <span className="font-mono">-${serviceBase.toLocaleString('es-CL')}</span>
                   </div>
                 )}
-                {discountApplied && (
-                  <div className="bg-sw-yellow/10 border border-sw-yellow/30 text-sw-yellow text-sm font-bold px-4 py-2 rounded-xl">
-                    Descuento: -${discountAmount.toLocaleString('es-CL')}
-                  </div>
-                )}
-                {addonTotal > 0 && (
-                  <div className="flex justify-between text-base text-gray-400">
-                    <span>Productos tienda</span>
-                    <span className="text-sw-blue font-mono font-bold">+${addonTotal.toLocaleString('es-CL')}</span>
+                <div className="flex justify-between items-center text-xs text-gray-600 font-bold uppercase tracking-widest pt-2 border-t border-gray-800">
+                  <span>Neto</span>
+                  <span className="font-mono">${Math.round(finalTotal / 1.19).toLocaleString('es-CL')}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-gray-600 font-bold uppercase tracking-widest">
+                  <span>IVA (19%)</span>
+                  <span className="font-mono">${Math.round(finalTotal - (finalTotal / 1.19)).toLocaleString('es-CL')}</span>
+                </div>
+              </div>
+
+              <div className="text-xs font-bold uppercase tracking-[0.15em] text-gray-500 mb-1 flex items-center gap-2 border-t border-gray-800 pt-3">
+                <Sparkles size={14} className="text-sw-yellow" /> Total a Pagar
+              </div>
+              <div className="text-4xl lg:text-5xl font-black text-sw-green font-mono tracking-tight">
+                ${finalTotal.toLocaleString('es-CL')}
+              </div>
+
+              <div className="mt-3 space-y-1.5 flex flex-col gap-1">
+                {selectedServiceObj && (
+                  <div className="flex justify-between items-center text-xs text-gray-400 uppercase font-bold tracking-widest">
+                    <span>Tiempo Max</span>
+                    <span className="font-mono font-bold text-gray-200">~{selectedServiceObj.estimatedDuration || '?'} MIN</span>
                   </div>
                 )}
               </div>

@@ -2,12 +2,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    function isAuthenticated() {
+    // --- Global Denial ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
       return request.auth != null;
     }
 
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isAdmin() {
-      return isAuthenticated() && (
+      return isSignedIn() && (
         request.auth.token.email in ["inversioneselcactus@gmail.com", "starparkiquique@gmail.com", "daelpaso.digital@gmail.com"] ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin')
@@ -15,54 +37,79 @@ service cloud.firestore {
     }
 
     function isWorker() {
-      return isAuthenticated() && (
+      return isSignedIn() && (
         isAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Admin', 'Cajero', 'Operario'])
       );
     }
 
+    // --- Validation Blueprints ---
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'rut', 'name', 'role', 'active']) &&
+             data.id is string && data.rut is string && data.name is string &&
+             data.role in ['Admin', 'Cajero', 'Operario', 'Visualizador'] &&
+             data.active is bool;
+    }
+
+    function isValidCalendarEvent(data) {
+      return data.keys().hasAll(['title', 'type', 'date', 'createdAt', 'isCompleted']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.type in ['income', 'expense', 'reminder', 'event'] &&
+             data.date is number && data.createdAt is number && data.isCompleted is bool;
+    }
+
     // --- Collections ---
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
     }
 
+    match /calendarEvents/{eventId} {
+      allow read: if isSignedIn() && (request.auth.token.email == "inversioneselcactus@gmail.com" || isWorker());
+      allow create: if isWorker() && isValidCalendarEvent(incoming()) && (incoming().createdBy == (exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name : 'Sistema'));
+      allow update: if isWorker() && isValidCalendarEvent(incoming());
+      allow delete: if isWorker();
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn(); 
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     match /categories/{categoryId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    match /rawMaterials/{itemId} {
-      allow read: if isAuthenticated();
-      allow write: if isWorker();
-    }
-
     match /services/{serviceId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     match /storeProducts/{productId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow write: if isWorker();
     }
 
-    match /clients/{clientId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); 
-    }
-
-    match /jobs/{jobId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); // Loosen for now to ensure vehicles can be added
+    match /rawMaterials/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isWorker();
     }
 
     match /shifts/{shiftId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow write: if isWorker();
     }
 
@@ -72,7 +119,7 @@ service cloud.firestore {
     }
 
     match /transactions/{transactionId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow write: if isWorker();
     }
   }

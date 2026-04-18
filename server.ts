@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PORT = Number(process.env.PORT) || 8080;
+const PORT = 3000;
 
 async function startServer() {
   const app = express();

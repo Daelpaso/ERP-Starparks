@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-ui: "Rajdhani", sans-serif;
+  --font-sans: "Rajdhani", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Orbitron", sans-serif;
   
   --color-sw-yellow: #FFE81F;
@@ -11,20 +11,11 @@
   --color-sw-red: #ff3838;
   --color-sw-green: #2ecc71;
   --color-bg-base: #000;
-
-  /* Base font size scaling */
-  --text-xxs: 0.6875rem; /* 11px */
-  --text-xs: 0.8125rem;  /* 13px */
-  --text-sm: 0.9375rem;  /* 15px */
-  --text-base: 1.0625rem; /* 17px */
-  --text-lg: 1.1875rem;  /* 19px */
-  --text-xl: 1.375rem;   /* 22px */
-  --text-2xl: 1.625rem;  /* 26px */
 }
 
 @layer base {
   body {
-    @apply bg-bg-base text-white font-sans transition-colors duration-300 antialiased;
+    @apply bg-bg-base text-white font-sans transition-colors duration-300;
   }
   h1, h2, h3, .sw-title-font {
     @apply font-display;

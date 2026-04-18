@@ -486,260 +486,27 @@ export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any)
   );
 };
 
-// --- Z Report (Admin Only) ---
-export const ZReportModal = ({ shift, jobs, transactions, onClose, showToast }: any) => {
-  if (!shift) return null;
-
-  // Calculate System Totals
-  const shiftJobs = jobs.filter((j: any) => j.shiftId === shift.id && j.status === 'Entregado');
-  const shiftTxs = transactions.filter((t: any) => t.shiftId === shift.id);
-
-  const systemCashJobs = shiftJobs.filter((j: any) => j.paymentMethod === 'Efectivo').reduce((acc: number, j: any) => acc + j.total, 0);
-  const systemCardsJobs = shiftJobs.filter((j: any) => j.paymentMethod === 'Tarjeta').reduce((acc: number, j: any) => acc + j.total, 0);
-  const systemTransfersJobs = shiftJobs.filter((j: any) => j.paymentMethod === 'Transferencia').reduce((acc: number, j: any) => acc + j.total, 0);
-  const systemCreditJobs = shiftJobs.filter((j: any) => j.paymentMethod === 'Crédito').reduce((acc: number, j: any) => acc + j.total, 0);
-
-  const breakdown = shiftJobs.reduce((acc: any, j: any) => {
-    acc.lavado += j.serviceTotal || 0;
-    acc.tienda += j.storeTotal || 0;
-    acc.estacionamiento += j.parkingFee || 0;
-    return acc;
-  }, { lavado: 0, tienda: 0, estacionamiento: 0 });
-
-  const txIncome = shiftTxs.filter((t: any) => t.type === 'income').reduce((acc: number, t: any) => acc + t.amount, 0);
-  const txExpense = shiftTxs.filter((t: any) => t.type === 'expense').reduce((acc: number, t: any) => acc + t.amount, 0);
-
-  const systemCash = shift.initialCash + systemCashJobs + txIncome - txExpense;
-  const discrepancyCash = (shift.declaredCash || 0) - systemCash;
-  const discrepancyCards = (shift.declaredCards || 0) - systemCardsJobs;
-  const discrepancyTransfers = (shift.declaredTransfers || 0) - systemTransfersJobs;
-  const discrepancyCredit = (shift.declaredCredit || 0) - systemCreditJobs;
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.text('REPORTE Z - CARWASH PRO', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.text(`Turno: ${shift.id}`, 20, 35);
-    doc.text(`Operador: ${shift.openedBy}`, 20, 40);
-    doc.text(`Apertura: ${new Date(shift.openedAt).toLocaleString('es-CL')}`, 20, 45);
-    doc.text(`Cierre: ${new Date(shift.closedAt).toLocaleString('es-CL')}`, 20, 50);
-
-    autoTable(doc, {
-      startY: 60,
-      head: [['Medio', 'Sistema', 'Declarado', 'Diferencia']],
-      body: [
-        ['Efectivo', `$${systemCash.toLocaleString('es-CL')}`, `$${(shift.declaredCash || 0).toLocaleString('es-CL')}`, `$${discrepancyCash.toLocaleString('es-CL')}`],
-        ['Tarjetas', `$${systemCardsJobs.toLocaleString('es-CL')}`, `$${(shift.declaredCards || 0).toLocaleString('es-CL')}`, `$${discrepancyCards.toLocaleString('es-CL')}`],
-        ['Transf.', `$${systemTransfersJobs.toLocaleString('es-CL')}`, `$${(shift.declaredTransfers || 0).toLocaleString('es-CL')}`, `$${discrepancyTransfers.toLocaleString('es-CL')}`],
-        ['Créditos', `$${systemCreditJobs.toLocaleString('es-CL')}`, `$${(shift.declaredCredit || 0).toLocaleString('es-CL')}`, `$${discrepancyCredit.toLocaleString('es-CL')}`],
-      ],
-    });
-
-    doc.save(`reporte_z_${shift.id}.pdf`);
-  };
-
-  const handleExportExcel = () => {
-    const data = [
-      { Categoria: 'Resumen de Ingresos', Detalle: '', Monto: '' },
-      { Categoria: 'Efectivo Ventas', Detalle: '', Monto: systemCashJobs },
-      { Categoria: 'Tarjetas Ventas', Detalle: '', Monto: systemCardsJobs },
-      { Categoria: 'Transferencias Ventas', Detalle: '', Monto: systemTransfersJobs },
-      { Categoria: 'Créditos Ventas', Detalle: '', Monto: systemCreditJobs },
-      { Categoria: 'Total Ventas', Detalle: '', Monto: systemCashJobs + systemCardsJobs + systemTransfersJobs + systemCreditJobs },
-      { Categoria: '', Detalle: '', Monto: '' },
-      { Categoria: 'Desglose por Servicio', Detalle: '', Monto: '' },
-      { Categoria: 'Lavado', Detalle: '', Monto: breakdown.lavado },
-      { Categoria: 'Tienda', Detalle: '', Monto: breakdown.tienda },
-      { Categoria: 'Estacionamiento', Detalle: '', Monto: breakdown.estacionamiento },
-      { Categoria: '', Detalle: '', Monto: '' },
-      { Categoria: 'Movimientos de Caja', Detalle: '', Monto: '' },
-      { Categoria: 'Fondo Inicial', Detalle: '', Monto: shift.initialCash },
-      ...shiftTxs.map((t: any) => ({
-        Categoria: t.type === 'income' ? 'Ingreso' : 'Egreso',
-        Detalle: t.reason,
-        Monto: t.type === 'income' ? t.amount : -t.amount
-      })),
-      { Categoria: '', Detalle: '', Monto: '' },
-      { Categoria: 'Cuadre de Caja', Detalle: 'Sistema', Monto: 'Declarado', Diferencia: 'Diferencia' },
-      { Categoria: 'Efectivo', Detalle: systemCash, Monto: shift.declaredCash || 0, Diferencia: discrepancyCash },
-      { Categoria: 'Tarjetas', Detalle: systemCardsJobs, Monto: shift.declaredCards || 0, Diferencia: discrepancyCards },
-      { Categoria: 'Transferencias', Detalle: systemTransfersJobs, Monto: shift.declaredTransfers || 0, Diferencia: discrepancyTransfers },
-      { Categoria: 'Créditos', Detalle: systemCreditJobs, Monto: shift.declaredCredit || 0, Diferencia: discrepancyCredit }
-    ];
-    
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte Z");
-    XLSX.writeFile(workbook, `reporte_z_${shift.id}.xlsx`);
-  };
-
-  return (
-    <div 
-      className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-xl overflow-y-auto print:bg-white print:p-0 print:block"
-      onClick={onClose}
-    >
-      <div 
-        className="panel-glass rounded-2xl w-full max-w-2xl border border-gray-800 flex flex-col my-8 print:border-none print:shadow-none print:my-0 print:text-black print:bg-white"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6 border-b border-gray-800 flex justify-between items-center print:hidden">
-          <h2 className="text-xl font-bold sw-title-font text-white tracking-widest uppercase">Reporte Z - Auditoría</h2>
-          <div className="flex gap-4">
-            <button onClick={handleExportExcel} className="text-gray-400 hover:text-sw-green transition-colors" title="Exportar Excel"><FileSpreadsheet size={24} /></button>
-            <button onClick={generatePDF} className="text-gray-400 hover:text-sw-blue transition-colors" title="Descargar PDF"><FileDown size={24} /></button>
-            <button 
-              onClick={() => showToast('Configuración de Google Drive requerida en el panel de administración', 'info')} 
-              className="text-gray-400 hover:text-sw-yellow transition-colors" 
-              title="Sincronizar con Google Drive"
-            >
-              <Cloud size={24} />
-            </button>
-            <button onClick={handlePrint} className="text-gray-400 hover:text-white transition-colors"><Printer size={24} /></button>
-            <button onClick={onClose} className="text-gray-500 hover:text-sw-red transition-colors"><X size={24} /></button>
-          </div>
-        </div>
-        
-        <div className="p-8 space-y-8 print:p-4 print:text-black" id="z-report-content">
-          {/* Header */}
-          <div className="text-center space-y-2 border-b border-gray-800 pb-6 print:border-gray-300">
-            <h1 className="text-2xl font-black uppercase tracking-widest print:text-black">CARWASH PRO</h1>
-            <p className="text-xs font-mono text-gray-500 print:text-gray-800">REPORTE Z - CIERRE DE CAJA</p>
-            <p className="text-xs font-mono text-gray-500 print:text-gray-800">Turno: {shift.id}</p>
-            <p className="text-xs font-mono text-gray-500 print:text-gray-800">Apertura: {new Date(shift.openedAt).toLocaleString('es-CL')}</p>
-            <p className="text-xs font-mono text-gray-500 print:text-gray-800">Cierre: {shift.closedAt ? new Date(shift.closedAt).toLocaleString('es-CL') : 'N/A'}</p>
-            <p className="text-xs font-mono text-gray-500 print:text-gray-800">Operador: {shift.openedBy}</p>
-          </div>
-
-          {/* Resumen de Ingresos */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-widest mb-4 print:text-black">1. Resumen de Ingresos (Ventas)</h3>
-            <div className="grid grid-cols-2 gap-8">
-              <div className="space-y-2 font-mono text-sm">
-                <p className="text-[10px] text-gray-500 uppercase mb-2">Por Medio de Pago</p>
-                <div className="flex justify-between"><span>Efectivo:</span><span>${systemCashJobs.toLocaleString('es-CL')}</span></div>
-                <div className="flex justify-between"><span>Tarjetas:</span><span>${systemCardsJobs.toLocaleString('es-CL')}</span></div>
-                <div className="flex justify-between"><span>Transf:</span><span>${systemTransfersJobs.toLocaleString('es-CL')}</span></div>
-                <div className="flex justify-between text-sw-red"><span>Créditos:</span><span>${systemCreditJobs.toLocaleString('es-CL')}</span></div>
-              </div>
-              <div className="space-y-2 font-mono text-sm">
-                <p className="text-[10px] text-gray-500 uppercase mb-2">Por Categoría</p>
-                <div className="flex justify-between"><span>Lavado:</span><span>${breakdown.lavado.toLocaleString('es-CL')}</span></div>
-                <div className="flex justify-between"><span>Tienda:</span><span>${breakdown.tienda.toLocaleString('es-CL')}</span></div>
-                <div className="flex justify-between"><span>Parking:</span><span>${breakdown.estacionamiento.toLocaleString('es-CL')}</span></div>
-              </div>
-            </div>
-            <div className="flex justify-between font-bold border-t border-gray-800 pt-2 mt-4 print:border-gray-300">
-              <span>TOTAL VENTAS:</span>
-              <span>${(systemCashJobs + systemCardsJobs + systemTransfersJobs).toLocaleString('es-CL')}</span>
-            </div>
-          </div>
-
-          {/* Movimientos de Caja */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-widest mb-4 print:text-black">2. Movimientos de Caja</h3>
-            <div className="space-y-2 font-mono text-sm">
-              <div className="flex justify-between text-gray-400 print:text-gray-600"><span>Fondo Inicial:</span><span>${shift.initialCash.toLocaleString('es-CL')}</span></div>
-              {shiftTxs.map((t: any) => (
-                <div key={t.id} className="flex justify-between text-xs">
-                  <span className="truncate pr-4">{new Date(t.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} - {t.reason}</span>
-                  <span className={t.type === 'income' ? 'text-sw-green print:text-black' : 'text-sw-red print:text-black'}>
-                    {t.type === 'income' ? '+' : '-'}${t.amount.toLocaleString('es-CL')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Cuadre de Caja (Ciego vs Sistema) */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-widest mb-4 print:text-black">3. Cuadre de Caja (Auditoría)</h3>
-            <table className="w-full text-sm font-mono text-left">
-              <thead className="border-b border-gray-800 print:border-gray-300 text-gray-500 print:text-gray-800">
-                <tr>
-                  <th className="pb-2">Medio</th>
-                  <th className="pb-2 text-right">Sistema</th>
-                  <th className="pb-2 text-right">Declarado</th>
-                  <th className="pb-2 text-right">Diferencia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/50 print:divide-gray-300">
-                <tr>
-                  <td className="py-2">Efectivo</td>
-                  <td className="py-2 text-right">${systemCash.toLocaleString('es-CL')}</td>
-                  <td className="py-2 text-right">${(shift.declaredCash || 0).toLocaleString('es-CL')}</td>
-                  <td className={`py-2 text-right font-bold ${discrepancyCash < 0 ? 'text-sw-red print:text-red-600' : discrepancyCash > 0 ? 'text-sw-yellow print:text-yellow-600' : 'text-sw-green print:text-green-600'}`}>
-                    {discrepancyCash > 0 ? '+' : ''}{discrepancyCash.toLocaleString('es-CL')}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2">Tarjetas</td>
-                  <td className="py-2 text-right">${systemCardsJobs.toLocaleString('es-CL')}</td>
-                  <td className="py-2 text-right">${(shift.declaredCards || 0).toLocaleString('es-CL')}</td>
-                  <td className={`py-2 text-right font-bold ${discrepancyCards < 0 ? 'text-sw-red print:text-red-600' : discrepancyCards > 0 ? 'text-sw-yellow print:text-yellow-600' : 'text-sw-green print:text-green-600'}`}>
-                    {discrepancyCards > 0 ? '+' : ''}{discrepancyCards.toLocaleString('es-CL')}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2">Transf.</td>
-                  <td className="py-2 text-right">${systemTransfersJobs.toLocaleString('es-CL')}</td>
-                  <td className="py-2 text-right">${(shift.declaredTransfers || 0).toLocaleString('es-CL')}</td>
-                  <td className={`py-2 text-right font-bold ${discrepancyTransfers < 0 ? 'text-sw-red print:text-red-600' : discrepancyTransfers > 0 ? 'text-sw-yellow print:text-yellow-600' : 'text-sw-green print:text-green-600'}`}>
-                    {discrepancyTransfers > 0 ? '+' : ''}{discrepancyTransfers.toLocaleString('es-CL')}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2">Créditos</td>
-                  <td className="py-2 text-right">${systemCreditJobs.toLocaleString('es-CL')}</td>
-                  <td className="py-2 text-right">${(shift.declaredCredit || 0).toLocaleString('es-CL')}</td>
-                  <td className={`py-2 text-right font-bold ${discrepancyCredit < 0 ? 'text-sw-red print:text-red-600' : discrepancyCredit > 0 ? 'text-sw-yellow print:text-yellow-600' : 'text-sw-green print:text-green-600'}`}>
-                    {discrepancyCredit > 0 ? '+' : ''}{discrepancyCredit.toLocaleString('es-CL')}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-8 text-center text-[10px] text-gray-600 font-mono print:text-gray-800">
-            <p>Reporte generado automáticamente por el sistema.</p>
-            <p>Firma Cajero: _______________________</p>
-            <p className="mt-4">Firma Admin: _______________________</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // --- Admin Shift History View ---
 const DEFAULT_SHIFT_COLUMNS = [
   { id: 'id', label: 'ID Turno' },
-  { id: 'operator', label: 'Operador' },
-  { id: 'opening', label: 'Apertura' },
-  { id: 'closing', label: 'Cierre' },
+  { id: 'operator', label: 'Nombre del Operador' },
+  { id: 'opening', label: 'Horario de apertura' },
+  { id: 'closing', label: 'Horario de cierre' },
   { id: 'status', label: 'Estado' },
-  { id: 'total', label: 'Total Declarado' },
+  { id: 'variance', label: 'Diferencia' },
 ];
 
 export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, currentUser, showToast }: any) => {
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-  const [shiftTab, setShiftTab] = useState<'recientes' | 'archivados'>('recientes');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [columns, setColumns] = useState(() => {
-    const saved = localStorage.getItem('shift_history_columns');
+    const saved = localStorage.getItem('shift_history_columns_v2');
     return saved ? JSON.parse(saved) : DEFAULT_SHIFT_COLUMNS;
   });
-  const [archiveShiftId, setArchiveShiftId] = useState<string | null>(null);
-  const [archiveCode, setArchiveCode] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('shift_history_columns', JSON.stringify(columns));
+    localStorage.setItem('shift_history_columns_v2', JSON.stringify(columns));
   }, [columns]);
 
   const handleDeleteShift = async (shiftId: string) => {
@@ -761,65 +528,56 @@ export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, cu
     }
   };
 
-  const handleArchiveShift = async () => {
-    if (!archiveShiftId) return;
-    
-    // Simple code check - in a real app this would be more secure
-    // Using 1124 as the default admin code based on previous requests
-    if (archiveCode !== '1124') {
-      showToast('Código de archivo incorrecto', 'error');
-      return;
-    }
 
-    try {
-      await updateDoc(doc(db, 'shifts', archiveShiftId), {
-        status: 'archived',
-        archivedAt: Date.now()
-      });
-      showToast('Turno archivado correctamente', 'success');
-      setArchiveShiftId(null);
-      setArchiveCode('');
-    } catch (e) {
-      showToast('Error al archivar turno', 'error');
-    }
-  };
 
   const filteredShifts = useMemo(() => {
     let result = shifts
       .filter((s: any) => {
-        const isArchived = s.status === 'archived';
-        if (shiftTab === 'recientes' && isArchived) return false;
-        if (shiftTab === 'archivados' && !isArchived) return false;
-
-        const matchesSearch = s.openedBy.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = (s.openedBy || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              (s.operatorName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              s.id.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDate = filterDate ? new Date(s.openedAt).toISOString().split('T')[0] === filterDate : true;
         return matchesSearch && matchesDate;
       })
-      .sort((a: any, b: any) => b.openedAt - a.openedAt);
+      .sort((a: any, b: any) => b.openedAt - a.openedAt)
+      .slice(0, 100);
 
-      if (shiftTab === 'recientes') {
-        result = result.slice(0, 100);
-      }
       return result;
-  }, [shifts, searchTerm, filterDate, shiftTab]);
+  }, [shifts, searchTerm, filterDate]);
+
+  const shiftStats = useMemo(() => {
+    const stats: Record<string, any> = {};
+    
+    filteredShifts.forEach((s: any) => {
+      const shiftJobs = jobs.filter((j: any) => j.shiftId === s.id && j.status !== 'Anulado');
+      const shiftTxs = transactions.filter((t: any) => t.shiftId === s.id);
+      
+      const totalSales = shiftJobs.reduce((sum: number, j: any) => sum + (j.total || 0), 0);
+      
+      const payments = shiftJobs.reduce((acc: any, j: any) => {
+        acc[j.paymentMethod] = (acc[j.paymentMethod] || 0) + (j.total || 0);
+        return acc;
+      }, { Efectivo: 0, Tarjeta: 0, Transferencia: 0, Crédito: 0 });
+
+      const serviceCounts = shiftJobs.reduce((acc: any, j: any) => {
+        acc[j.serviceName] = (acc[j.serviceName] || 0) + 1;
+        return acc;
+      }, {});
+
+      const txIncome = shiftTxs.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + t.amount, 0);
+      const txExpense = shiftTxs.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + t.amount, 0);
+      
+      const systemCash = (s.initialCash || 0) + (payments['Efectivo'] || 0) + txIncome - txExpense;
+      const cashVariance = (s.declaredCash || 0) - systemCash;
+      
+      stats[s.id] = { totalSales, payments, serviceCounts, cashVariance, hasVariance: cashVariance !== 0 };
+    });
+    
+    return stats;
+  }, [filteredShifts, jobs, transactions]);
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-4 border-b border-gray-800 pb-2">
-        <button 
-          onClick={() => setShiftTab('recientes')}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all rounded-lg ${shiftTab === 'recientes' ? 'bg-sw-yellow/20 text-sw-yellow' : 'text-gray-500 hover:text-white'}`}
-        >
-          Recientes (Max 100)
-        </button>
-        <button 
-          onClick={() => setShiftTab('archivados')}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all rounded-lg ${shiftTab === 'archivados' ? 'bg-sw-blue/20 text-sw-blue' : 'text-gray-500 hover:text-white'}`}
-        >
-          Archivados
-        </button>
-      </div>
-
       <div className="panel-glass p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
@@ -861,61 +619,81 @@ export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, cu
 
       {viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredShifts.map((shift: any) => (
-            <div key={shift.id} className="panel-glass p-6 rounded-2xl border border-gray-800 hover:border-sw-yellow/30 transition-all group relative overflow-hidden">
-              <div className={`absolute top-0 right-0 w-2 h-full ${shift.status === 'open' ? 'bg-sw-green' : 'bg-gray-800'}`}></div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-lg font-mono font-bold text-white uppercase">{shift.id}</div>
-                    <div className="text-[10px] text-sw-blue font-bold uppercase tracking-widest">Operador: {shift.openedBy}</div>
+          {filteredShifts.map((shift: any) => {
+            const stats = shiftStats[shift.id] || { totalSales: 0, payments: {}, serviceCounts: {}, cashVariance: 0, hasVariance: false };
+            return (
+              <div 
+                key={shift.id} 
+                onClick={() => onShowZReport(shift)}
+                className="panel-glass p-6 rounded-2xl border border-gray-800 hover:border-sw-yellow/50 transition-all group relative overflow-hidden cursor-pointer active:scale-[0.98]"
+              >
+                <div className={`absolute top-0 right-0 w-2 h-full ${shift.status === 'open' ? 'bg-sw-green' : 'bg-gray-800'}`}></div>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-lg font-mono font-bold text-white uppercase">{shift.id}</div>
+                      <div className="text-[10px] text-sw-blue font-bold uppercase tracking-widest">Operador: {shift.operatorName || shift.openedBy}</div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${shift.status === 'open' ? 'bg-sw-green/20 text-sw-green' : 'bg-gray-800 text-gray-500'}`}>
+                      {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
+                    </span>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${shift.status === 'open' ? 'bg-sw-green/20 text-sw-green' : 'bg-gray-800 text-gray-500'}`}>
-                    {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
-                  </span>
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="text-[10px] text-gray-500 uppercase font-bold">Apertura</div>
-                  <div className="text-xs text-white font-mono">{new Date(shift.openedAt).toLocaleString('es-CL')}</div>
-                </div>
-
-                <div className="flex justify-between items-end pt-4 border-t border-gray-800">
-                  <div>
-                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Total Declarado</div>
-                    <div className="text-xl font-mono font-black text-white">
-                      ${((shift.declaredCash || 0) + (shift.declaredCards || 0) + (shift.declaredTransfers || 0)).toLocaleString('es-CL')}
+                  
+                  <div className="grid grid-cols-2 gap-4 border-y border-gray-800/30 py-4">
+                    <div>
+                      <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Total Ventas</div>
+                      <div className="text-sm text-white font-mono font-bold">${stats.totalSales.toLocaleString('es-CL')}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">Diferencia</div>
+                      <div className={`text-sm font-mono font-bold ${stats.hasVariance ? 'text-sw-red' : 'text-sw-green'}`}>
+                        {stats.hasVariance ? `$${stats.cashVariance.toLocaleString('es-CL')}` : 'Sin Diferencia'}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => onShowZReport(shift)}
-                      className="p-3 rounded-xl bg-sw-yellow/10 border border-sw-yellow/30 text-sw-yellow hover:bg-sw-yellow hover:text-black transition-all"
-                      title="Ver Reporte Z"
-                    >
-                      <FileText size={20} />
-                    </button>
-                    {shift.status !== 'archived' && (
+
+                  <div className="space-y-2">
+                    <div className="text-[10px] text-gray-500 uppercase font-bold">Resumen Pagos</div>
+                    <div className="flex flex-wrap gap-2">
+                       {Object.entries(stats.payments).map(([method, amount]: [string, any]) => (
+                         amount > 0 && (
+                           <span key={method} className="bg-black/40 px-2 py-1 rounded border border-gray-800 text-[9px] text-gray-300">
+                             {method}: ${amount.toLocaleString('es-CL')}
+                           </span>
+                         )
+                       ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-[10px] text-gray-500 uppercase font-bold">Servicios ({Object.values(stats.serviceCounts).reduce((a: any, b: any) => a + b, 0)})</div>
+                    <div className="flex flex-wrap gap-1">
+                       {Object.entries(stats.serviceCounts).map(([name, count]: [string, any]) => (
+                         <span key={name} className="text-[9px] text-gray-500 italic">
+                           {count}x {name},
+                         </span>
+                       ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-4 border-t border-gray-800">
+                    <div className="text-[10px] text-gray-500 font-mono italic">
+                      {new Date(shift.openedAt).toLocaleDateString('es-CL')}
+                    </div>
+                    <div className="flex gap-2">
                       <button 
-                        onClick={() => setArchiveShiftId(shift.id)}
-                        className="p-3 rounded-xl bg-sw-blue/10 border border-sw-blue/30 text-sw-blue hover:bg-sw-blue hover:text-black transition-all"
-                        title="Archivar Turno"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
+                        className="p-2 rounded-lg bg-sw-red/10 border border-sw-red/30 text-sw-red hover:bg-sw-red hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                        title="Eliminar Turno"
                       >
-                        <Archive size={20} />
+                        <Trash2 size={16} />
                       </button>
-                    )}
-                    <button 
-                      onClick={() => handleDeleteShift(shift.id)}
-                      className="p-3 rounded-xl bg-sw-red/10 border border-sw-red/30 text-sw-red hover:bg-sw-red hover:text-white transition-all"
-                      title="Eliminar Turno"
-                    >
-                      <Trash2 size={20} />
-                    </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="panel-glass rounded-2xl border border-gray-800 overflow-hidden">
@@ -940,95 +718,60 @@ export const ShiftHistoryView = ({ shifts, jobs, transactions, onShowZReport, cu
                 </Reorder.Group>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
-                {filteredShifts.map((shift: any) => (
-                  <tr key={shift.id} className="hover:bg-white/5 transition-colors">
-                    {columns.map((col: any) => (
-                      <td key={col.id} className="p-4">
-                        {col.id === 'id' && <span className="font-mono text-sm text-white">{shift.id}</span>}
-                        {col.id === 'operator' && <span className="text-xs text-gray-300 uppercase">{shift.openedBy}</span>}
-                        {col.id === 'opening' && <span className="text-xs text-gray-400 font-mono">{new Date(shift.openedAt).toLocaleString('es-CL')}</span>}
-                        {col.id === 'closing' && <span className="text-xs text-gray-400 font-mono">{shift.closedAt ? new Date(shift.closedAt).toLocaleString('es-CL') : '-'}</span>}
-                        {col.id === 'status' && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${shift.status === 'open' ? 'bg-sw-green/20 text-sw-green' : 'bg-gray-800 text-gray-500'}`}>
-                            {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
-                          </span>
-                        )}
-                        {col.id === 'total' && (
-                          <span className="font-mono font-bold text-white">
-                            ${((shift.declaredCash || 0) + (shift.declaredCards || 0) + (shift.declaredTransfers || 0)).toLocaleString('es-CL')}
-                          </span>
-                        )}
-                      </td>
-                    ))}
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => onShowZReport(shift)}
-                          className="p-2 text-sw-yellow hover:bg-sw-yellow/10 rounded-lg transition-all"
-                          title="Ver Reporte Z"
-                        >
-                          <FileText size={18} />
-                        </button>
-                        {shift.status !== 'archived' && (
+                {filteredShifts.map((shift: any) => {
+                  const stats = shiftStats[shift.id] || { totalSales: 0, payments: {}, serviceCounts: {}, cashVariance: 0, hasVariance: false };
+                  return (
+                    <tr 
+                      key={shift.id} 
+                      onClick={() => onShowZReport(shift)}
+                      className="hover:bg-white/5 transition-colors cursor-pointer group"
+                    >
+                      {columns.map((col: any) => (
+                        <td key={col.id} className="p-4">
+                          {col.id === 'id' && <span className="font-mono text-sm text-white group-hover:text-sw-yellow transition-colors">{shift.id}</span>}
+                          {col.id === 'operator' && <span className="text-xs text-gray-300 uppercase">{shift.operatorName || shift.openedBy}</span>}
+                          {col.id === 'opening' && <span className="text-xs text-gray-400 font-mono">{new Date(shift.openedAt).toLocaleString('es-CL')}</span>}
+                          {col.id === 'closing' && <span className="text-xs text-gray-400 font-mono">{shift.closedAt ? new Date(shift.closedAt).toLocaleString('es-CL') : '-'}</span>}
+                          {col.id === 'status' && (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${shift.status === 'open' ? 'bg-sw-green/20 text-sw-green' : 'bg-gray-800 text-gray-500'}`}>
+                              {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
+                            </span>
+                          )}
+                          {col.id === 'variance' && (
+                            <span className={`text-xs font-bold font-mono ${stats.hasVariance ? 'text-sw-red' : 'text-sw-green'}`}>
+                              {stats.hasVariance ? `$${stats.cashVariance.toLocaleString('es-CL')}` : 'Sin Diferencia'}
+                            </span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-2">
                           <button 
-                            onClick={() => setArchiveShiftId(shift.id)}
-                            className="p-2 text-sw-blue hover:bg-sw-blue/10 rounded-lg transition-all"
-                            title="Archivar Turno"
+                            onClick={(e) => { e.stopPropagation(); onShowZReport(shift); }}
+                            className="p-2 text-sw-yellow hover:bg-sw-yellow/10 rounded-lg transition-all"
+                            title="Ver Reporte Z"
                           >
-                            <Archive size={18} />
+                            <FileText size={18} />
                           </button>
-                        )}
-                        <button 
-                          onClick={() => handleDeleteShift(shift.id)}
-                          className="p-2 text-sw-red hover:bg-sw-red/10 rounded-lg transition-all"
-                          title="Eliminar Turno"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
+                            className="p-2 text-sw-red hover:bg-sw-red/10 rounded-lg transition-all"
+                            title="Eliminar Turno"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Archive Confirmation Modal */}
-      <AnimatePresence>
-        {archiveShiftId && (
-          <div className="fixed inset-0 bg-black/90 z-[110] flex items-center justify-center p-4 backdrop-blur-md">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="panel-glass rounded-2xl w-full max-w-sm border border-sw-blue/30 p-6 space-y-6"
-            >
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold sw-title-font text-sw-blue tracking-widest uppercase">Archivar Turno</h3>
-                <button onClick={() => setArchiveShiftId(null)} className="text-gray-500 hover:text-sw-red"><X size={24} /></button>
-              </div>
-              <p className="text-sm text-gray-400">Ingrese el código de seguridad para archivar este reporte de turno.</p>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Código de Archivo</label>
-                <input 
-                  type="password"
-                  value={archiveCode}
-                  onChange={(e) => setArchiveCode(e.target.value)}
-                  className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white font-mono text-center text-2xl tracking-[0.5em] focus:border-sw-blue outline-none"
-                  placeholder="****"
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setArchiveShiftId(null)} className="flex-1 py-3 rounded-xl border border-gray-800 text-gray-500 font-bold uppercase tracking-widest text-xs">Cancelar</button>
-                <button onClick={handleArchiveShift} className="flex-1 py-3 rounded-xl bg-sw-blue text-black font-bold uppercase tracking-widest text-xs">Confirmar</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Archive Modal Removed as per user request */}
     </div>
   );
 };

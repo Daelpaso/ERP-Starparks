@@ -162,6 +162,23 @@
         "discrepancyTransfers": { "type": "number" }
       },
       "required": ["id", "systemCash", "systemCards", "systemTransfers"]
+    },
+    "CalendarEvent": {
+      "title": "Calendar Event",
+      "description": "Events, reminders, and daily management tasks",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense", "reminder", "event"] },
+        "amount": { "type": "number" },
+        "time": { "type": "string" },
+        "description": { "type": "string" },
+        "isCompleted": { "type": "boolean" },
+        "date": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["title", "type", "date", "createdAt", "isCompleted"]
     }
   },
   "firestore": {
@@ -204,6 +221,10 @@
     "transactions": {
       "schema": { "$ref": "#/entities/Transaction" },
       "description": "Cash movements"
+    },
+    "calendarEvents": {
+      "schema": { "$ref": "#/entities/CalendarEvent" },
+      "description": "Agenda events"
     }
   }
 }
