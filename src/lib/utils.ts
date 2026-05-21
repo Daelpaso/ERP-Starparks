@@ -1,18 +1,131 @@
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+export const exportToPDF = (title: string, headers: string[], rows: any[][], summary?: { label: string, value: string }[]) => {
+  const doc = new jsPDF();
+  
+  // Title
+  doc.setFontSize(20);
+  doc.setTextColor(0, 168, 255); // StarParks Blue
+  doc.text('StarParks CarWash Pro', 14, 15);
+  
+  doc.setFontSize(14);
+  doc.setTextColor(100);
+  doc.text(title, 14, 25);
+  
+  doc.setFontSize(10);
+  doc.text(`Fecha de Emisión: ${new Date().toLocaleString('es-CL')}`, 14, 32);
+  
+  // Summary Section
+  if (summary && summary.length > 0) {
+    let y = 40;
+    doc.setFontSize(11);
+    doc.setTextColor(50);
+    summary.forEach(item => {
+      doc.text(`${item.label}: ${item.value}`, 14, y);
+      y += 6;
+    });
+    
+    // Start table after summary
+    autoTable(doc, {
+      startY: y + 5,
+      head: [headers],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [0, 168, 255], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+    });
+  } else {
+    autoTable(doc, {
+      startY: 40,
+      head: [headers],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [0, 168, 255], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+    });
+  }
+  
+  doc.save(`${title.toLowerCase().replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+};
+
+export const generateDeliveryVoucher = (job: any) => {
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: [80, 150] // Mini thermal printer style
+  });
+
+  doc.setFontSize(14);
+  doc.setTextColor(0, 168, 255);
+  doc.text('STARPARKS', 40, 10, { align: 'center' });
+  doc.setFontSize(8);
+  doc.setTextColor(100);
+  doc.text('Carwash Pro V1', 40, 14, { align: 'center' });
+  
+  doc.setDrawColor(200);
+  doc.line(10, 17, 70, 17);
+
+  doc.setFontSize(10);
+  doc.setTextColor(0);
+  doc.text('RECOMPROMISO DE ENTREGA', 40, 23, { align: 'center' });
+
+  doc.setFontSize(8);
+  let y = 32;
+  const addLine = (label: string, value: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.text(`${label}:`, 10, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${value}`, 40, y);
+    y += 5;
+  };
+
+  addLine('FOLIO JOB', job.id);
+  addLine('PATENTE', job.plate);
+  addLine('CLIENTE', job.clientName || 'Particular');
+  addLine('ESTADO', job.status);
+  addLine('ENTRADA', new Date(job.entryDate).toLocaleString('es-CL'));
+  if (job.exitDate) addLine('SALIDA', new Date(job.exitDate).toLocaleString('es-CL'));
+  
+  doc.line(10, y + 2, 70, y + 2);
+  y += 8;
+
+  addLine('SERVICIO', job.serviceName || 'N/A');
+  addLine('VALOR BASE', `$${(job.serviceTotal || 0).toLocaleString('es-CL')}`);
+  if (job.storeTotal > 0) addLine('TIENDA', `$${job.storeTotal.toLocaleString('es-CL')}`);
+  if (job.parkingFee > 0) addLine('PARKING', `$${job.parkingFee.toLocaleString('es-CL')}`);
+  if (job.discountAmount > 0) addLine('DESC.', `-$${job.discountAmount.toLocaleString('es-CL')}`);
+  
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  y += 5;
+  doc.text('TOTAL:', 10, y);
+  doc.text(`$${(job.total || 0).toLocaleString('es-CL')}`, 40, y);
+
+  y += 10;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text('¡Gracias por preferir StarParks!', 40, y, { align: 'center' });
+  doc.text('www.starparks.cl', 40, y + 4, { align: 'center' });
+
+  doc.save(`voucher_${job.plate}_${Date.now()}.pdf`);
+};
 
 export const validarPatenteChilena = (patente: string) => {
   if (!patente) return false;
-  const limpia = patente.replace(/-/g, '').toUpperCase(); 
-  const regexAutosAntiguos = /^[A-Z]{2}[0-9]{4}$/; 
-  const regexAutosActuales = /^[BCDFGHJKLPRSTVWXYZ]{4}[0-9]{2}$/;
-  const regexMotos = /^[A-Z]{2}[0-9]{3}$|^[BCDFGHJKLPRSTVWXYZ]{3}[0-9]{2}$/;
-  return regexAutosAntiguos.test(limpia) || regexAutosActuales.test(limpia) || regexMotos.test(limpia);
+  const limpia = patente.replace(/[\s-]/g, '').toUpperCase(); 
+  const regexLLNNNN = /^[A-Z]{2}[0-9]{4}$/; 
+  const regexLLLLNN = /^[A-Z]{4}[0-9]{2}$/;
+  const regexMotos = /^[A-Z]{2}[0-9]{3}$|^[A-Z]{3}[0-9]{2}$/;
+  return regexLLNNNN.test(limpia) || regexLLLLNN.test(limpia) || regexMotos.test(limpia);
 };
 
 export const validarTelefonoChileno = (phone: string) => {
   if (!phone) return false;
-  const cleaned = phone.replace(/[\s-]/g, '');
-  return /^(\+?56)?9[0-9]{8}$/.test(cleaned);
+  // Limpiamos todo excepto números y el signo +
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  // Formatos válidos: +569XXXXXXXX (12 chars), 569XXXXXXXX (11 chars), 9XXXXXXXX (9 chars)
+  return /^(\+569|569|9)[0-9]{8}$/.test(cleaned);
 };
 
 export const validarEmail = (email: string) => {

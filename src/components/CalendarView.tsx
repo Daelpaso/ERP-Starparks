@@ -30,9 +30,16 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
   const jobsByDate = useMemo(() => {
     const map: Record<string, any[]> = {};
     jobs.forEach((job: any) => {
-      const dateKey = format(new Date(job.entryDate), 'yyyy-MM-dd');
-      if (!map[dateKey]) map[dateKey] = [];
-      map[dateKey].push(job);
+      if (!job.entryDate) return;
+      try {
+        const d = new Date(job.entryDate);
+        if (isNaN(d.getTime())) return;
+        const dateKey = format(d, 'yyyy-MM-dd');
+        if (!map[dateKey]) map[dateKey] = [];
+        map[dateKey].push(job);
+      } catch (e) {
+        console.error("Invalid entryDate:", job.entryDate);
+      }
     });
     return map;
   }, [jobs]);
@@ -67,7 +74,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
                 <h2 className="text-2xl font-black text-white sw-title-font tracking-tighter uppercase">
                   {format(currentMonth, 'MMMM yyyy', { locale: es })}
                 </h2>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Agenda de Operaciones</p>
+                <p className="text-[14px] text-gray-500 font-bold uppercase tracking-widest">Agenda de Operaciones</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -79,7 +86,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
               </button>
               <button 
                 onClick={() => setCurrentMonth(new Date())}
-                className="px-4 py-2 rounded-lg bg-black/40 border border-gray-800 text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-white hover:border-white transition-all"
+                className="px-4 py-2 rounded-lg bg-black/40 border border-gray-800 text-[14px] font-bold text-gray-400 uppercase tracking-widest hover:text-white hover:border-white transition-all"
               >
                 Hoy
               </button>
@@ -94,7 +101,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
 
           <div className="grid grid-cols-7 gap-px bg-gray-800/50 rounded-xl overflow-hidden border border-gray-800">
             {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
-              <div key={day} className="bg-black/60 p-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              <div key={day} className="bg-black/60 p-3 text-center text-[14px] font-bold text-gray-500 uppercase tracking-widest">
                 {day}
               </div>
             ))}
@@ -114,14 +121,14 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
                   } ${isSelected ? 'ring-2 ring-inset ring-sw-blue z-10' : 'hover:bg-white/5'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className={`text-xs font-mono font-bold ${
+                    <span className={`text-[14px] font-mono font-bold ${
                       today ? 'w-6 h-6 rounded-full bg-sw-blue text-black flex items-center justify-center' : 
                       isSelected ? 'text-sw-blue' : 'text-gray-500'
                     }`}>
                       {format(day, 'd')}
                     </span>
                     {dayJobs.length > 0 && (
-                      <span className="text-[8px] font-bold bg-white/10 px-1.5 py-0.5 rounded text-gray-400">
+                      <span className="text-[14px] font-bold bg-white/10 px-1.5 py-0.5 rounded text-gray-400">
                         {dayJobs.length}
                       </span>
                     )}
@@ -136,7 +143,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
                       ></div>
                     ))}
                     {dayJobs.length > 3 && (
-                      <div className="text-[8px] text-gray-600 font-bold text-center">
+                      <div className="text-[14px] text-gray-600 font-bold text-center">
                         +{dayJobs.length - 3} más
                       </div>
                     )}
@@ -158,7 +165,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
           ].map(item => (
             <div key={item.label} className="flex items-center gap-2">
               <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{item.label}</span>
+              <span className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">{item.label}</span>
             </div>
           ))}
         </div>
@@ -172,7 +179,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
               <h3 className="text-lg font-black text-white uppercase tracking-tighter">
                 {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
               </h3>
-              <p className="text-[10px] text-sw-yellow font-bold uppercase tracking-widest">Detalle del Día</p>
+              <p className="text-[14px] text-sw-yellow font-bold uppercase tracking-widest">Detalle del Día</p>
             </div>
             <div className="w-10 h-10 bg-sw-yellow/10 rounded-lg flex items-center justify-center text-sw-yellow border border-sw-yellow/30">
               <Clock size={20} />
@@ -183,7 +190,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
             {selectedDateJobs.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-gray-800 rounded-xl">
                 <AlertCircle size={32} className="mx-auto text-gray-700 mb-2" />
-                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">No hay servicios programados</p>
+                <p className="text-[14px] text-gray-600 font-bold uppercase tracking-widest">No hay servicios programados</p>
               </div>
             ) : (
               selectedDateJobs.map((job: any) => (
@@ -197,9 +204,9 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${getStatusColor(job.status)} shadow-[0_0_10px_rgba(0,0,0,0.5)]`}></div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{job.status}</span>
+                      <span className="text-[14px] font-bold text-gray-400 uppercase tracking-widest">{job.status}</span>
                     </div>
-                    <span className="text-[10px] font-mono text-sw-yellow font-bold">{format(new Date(job.entryDate), 'HH:mm')}</span>
+                    <span className="text-[14px] font-mono text-sw-yellow font-bold">{format(new Date(job.entryDate), 'HH:mm')}</span>
                   </div>
                   
                   <div className="flex items-center gap-3 mb-3">
@@ -208,16 +215,16 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
                     </div>
                     <div>
                       <div className="text-sm font-black text-white uppercase tracking-tight">{job.plate}</div>
-                      <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{job.serviceName}</div>
+                      <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest">{job.serviceName}</div>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-gray-800/50">
                     <div className="flex items-center gap-2">
                       <User size={12} className="text-gray-600" />
-                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate max-w-[100px]">{job.clientName}</span>
+                      <span className="text-[14px] text-gray-400 font-bold uppercase tracking-widest truncate max-w-[100px]">{job.clientName}</span>
                     </div>
-                    <div className="text-[10px] font-mono text-sw-green font-black">${job.total.toLocaleString('es-CL')}</div>
+                    <div className="text-[14px] font-mono text-sw-green font-black">${job.total.toLocaleString('es-CL')}</div>
                   </div>
                 </motion.div>
               ))
@@ -227,7 +234,7 @@ export const CalendarView = ({ jobs, setDetailModalJobId }: any) => {
           {selectedDateJobs.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-800">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total Estimado</span>
+                <span className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Total Estimado</span>
                 <span className="text-xl font-mono font-black text-sw-green">
                   ${selectedDateJobs.reduce((acc: number, curr: any) => acc + curr.total, 0).toLocaleString('es-CL')}
                 </span>

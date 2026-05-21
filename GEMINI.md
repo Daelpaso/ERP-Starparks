@@ -17,7 +17,7 @@ Este documento proporciona una visión integral de la aplicación **StarParks Ca
 
 ### A. Punto de Venta (POS)
 - Venta de **Servicios** (lavado, pulido, etc.) y **Productos de Tienda** (bebidas, snacks, accesorios).
-- Selección de categoría de vehículo (Sedán, SUV, Camioneta) con **factores multiplicadores de precio**.
+- Selección de categoría de vehículo (CITY CAR, SEDAN, CAMIONETA, etc.) con **factores multiplicadores de precio**.
 - Aplicación de descuentos y selección de métodos de pago (Efectivo, Tarjeta, Transferencia).
 - Generación de comprobantes en PDF.
 

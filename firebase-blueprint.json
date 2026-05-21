@@ -16,7 +16,7 @@
     },
     "Category": {
       "title": "Category",
-      "description": "Vehicle categories (Sedán, SUV, etc.)",
+      "description": "Vehicle categories (CITY CAR, SEDAN, etc.)",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -83,6 +83,7 @@
         "name": { "type": "string" },
         "phone": { "type": "string" },
         "email": { "type": "string" },
+        "lastVehicleTypeId": { "type": "string", "description": "Last preferred vehicle category" },
         "date": { "type": "number" },
         "visits": { "type": "number" }
       },
@@ -179,6 +180,21 @@
         "createdBy": { "type": "string" }
       },
       "required": ["title", "type", "date", "createdAt", "isCompleted"]
+    },
+    "ManualAction": {
+      "title": "Manual Action",
+      "description": "Log of manual interventions (deletions, shift overrides, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "operatorId": { "type": "string" },
+        "operatorName": { "type": "string" },
+        "approvedBy": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "action", "operatorId"]
     }
   },
   "firestore": {
@@ -225,6 +241,10 @@
     "calendarEvents": {
       "schema": { "$ref": "#/entities/CalendarEvent" },
       "description": "Agenda events"
+    },
+    "system_logs": {
+      "schema": { "$ref": "#/entities/ManualAction" },
+      "description": "Manual actions audit log"
     }
   }
 }

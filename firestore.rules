@@ -64,7 +64,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && isValidUser(incoming());
       allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();
     }
@@ -111,16 +111,24 @@ service cloud.firestore {
     match /shifts/{shiftId} {
       allow read: if isSignedIn();
       allow write: if isWorker();
+      allow delete: if isAdmin();
     }
 
     match /shifts_audit/{shiftId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /transactions/{transactionId} {
       allow read: if isSignedIn();
       allow write: if isWorker();
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

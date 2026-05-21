@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShoppingCart, FileText, Clock, Trash2, CheckCircle2, ShieldCheck, AlertTriangle, Edit2, Shield, ChevronLeft, UserPlus, Eye, EyeOff, MessageCircle, MessageSquare, Printer, DollarSign, Package, Plus, Sparkles } from 'lucide-react';
+import { X, ShoppingCart, FileText, Clock, Trash2, CheckCircle2, ShieldCheck, AlertTriangle, Edit2, Shield, ChevronLeft, UserPlus, Eye, EyeOff, MessageCircle, MessageSquare, Printer, DollarSign, Package, Plus, Sparkles, Star, TrendingUp, XCircle } from 'lucide-react';
 import { calculateParkingTimeAndFee, generateDeliveryVoucher } from '../lib/utils';
 import { PAYMENT_METHODS, DOC_TYPES } from '../lib/constants';
 import { doc, updateDoc, setDoc, deleteDoc, db, increment, handleFirestoreError, OperationType } from '../firebase';
+import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
-export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStoreModalJobId, addTimelineEvent, hasPermission }: any) => {
+export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStoreModalJobId, addTimelineEvent, hasPermission, currentUser, currentShift }: any) => {
   const job = jobs.find((j: any) => j.id === jobId);
   const [note, setNote] = useState(job?.notes || '');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePin, setDeletePin] = useState('');
+  const [deletionReason, setDeletionReason] = useState('');
   if (!job) return null;
 
   const { extraFee, extraMins, totalElapsedSinceReady } = calculateParkingTimeAndFee(job);
@@ -28,11 +30,53 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
 
   const handleDeleteVehicle = async () => {
     if (deletePin !== '1124') {
-      alert('PIN Inválido');
+      alert('PIN de Administrador Inválido');
       return;
     }
+    
+    if (!deletionReason || deletionReason.length < 5) {
+      alert('Debe ingresar un motivo válido (mínimo 5 caracteres) para la eliminación.');
+      return;
+    }
+
     try {
-      await updateDoc(doc(db, 'jobs', jobId), { isActive: false, active: false });
+      const now = Date.now();
+      const txId = `tx_del_${Date.now()}`;
+      
+      // 1. Log in transactions (Shift Audit) if there's an active shift
+      if (currentShift?.status === 'open') {
+        await setDoc(doc(db, 'transactions', txId), {
+          id: txId,
+          shiftId: currentShift.id,
+          type: 'expense', // Use expense to track as a "loss" or removal of expected income
+          amount: 0, // No monetary value but it reflects in the log
+          reason: `ANULACIÓN: ${job.plate} - ${deletionReason}`,
+          timestamp: now,
+          userId: currentUser?.id || 'system',
+          jobId: job.id,
+          isDeletion: true
+        });
+      }
+
+      // 2. Update job to mark as deleted/anulado
+      await updateDoc(doc(db, 'jobs', jobId), { 
+        isActive: false, 
+        active: false, 
+        status: 'Anulado',
+        deletedAt: now,
+        deletedBy: currentUser?.email || currentUser?.id || 'system',
+        deletionReason: deletionReason,
+        timeline: [
+          ...(job.timeline || []),
+          {
+            status: 'Anulado',
+            timestamp: now,
+            workerId: currentUser?.id || 'system',
+            note: `Eliminado por Admin. Motivo: ${deletionReason}`
+          }
+        ]
+      });
+
       onClose();
     } catch (e: any) {
       handleFirestoreError(e, OperationType.UPDATE, 'jobs');
@@ -51,11 +95,15 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
         <div className="flex justify-between items-center p-6 border-b border-gray-800 bg-sw-blue/5">
           <div>
             <h2 className="text-3xl font-mono font-black text-white tracking-tighter">{job.plate}</h2>
-            <p className="text-xs text-sw-blue font-ui font-bold uppercase tracking-[0.2em]">{job.id}</p>
+            <p className="text-[14px] text-sw-blue font-ui font-bold uppercase tracking-[0.2em]">{job.id}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => generateDeliveryVoucher(job)} className="p-2 hover:bg-sw-blue/20 text-gray-500 hover:text-sw-blue rounded-xl transition-all" title="Reimprimir Voucher"><Printer size={24} /></button>
-            <button onClick={() => setShowDeleteConfirm(true)} className="p-2 hover:bg-sw-red/20 text-gray-500 hover:text-sw-red rounded-xl transition-all" title="Eliminar Vehículo"><Trash2 size={24} /></button>
+            {job.status === 'Cola' && (
+              <button onClick={() => setShowDeleteConfirm(true)} className="p-2 hover:bg-sw-red/20 text-gray-500 hover:text-sw-red rounded-xl transition-all" title="Eliminar Vehículo">
+                <Trash2 size={24} />
+              </button>
+            )}
             <button onClick={onClose} className="p-2 hover:bg-sw-red/20 hover:text-sw-red rounded-full transition-all text-gray-500"><X size={24} /></button>
           </div>
         </div>
@@ -63,19 +111,51 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
         {showDeleteConfirm && (
           <div className="absolute inset-0 bg-black/95 z-50 flex items-center justify-center p-6 rounded-2xl flex-col backdrop-blur-md">
             <AlertTriangle size={64} className="text-sw-red mb-6 animate-pulse" />
-            <h2 className="text-2xl font-black uppercase text-white mb-2 text-center">PELIGRO: Eliminar Vehículo</h2>
-            <p className="text-gray-400 text-center mb-8 max-w-md">Esta acción es irreversible y eliminará completamente el vehículo del sistema.</p>
-            <div className="w-full max-w-xs space-y-4">
-              <input 
-                type="password" 
-                placeholder="PIN ADMIN" 
-                value={deletePin} 
-                onChange={(e) => setDeletePin(e.target.value)} 
-                className="w-full bg-black border border-sw-red text-sw-red text-center font-mono text-2xl py-3 rounded-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-sw-red"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => { setShowDeleteConfirm(false); setDeletePin(''); }} className="py-3 rounded-xl border border-gray-600 text-gray-400 hover:bg-gray-800 font-bold uppercase tracking-widest text-xs">Cancelar</button>
-                <button onClick={handleDeleteVehicle} disabled={deletePin.length !== 4} className="py-3 rounded-xl bg-sw-red/20 border border-sw-red text-sw-red hover:bg-sw-red hover:text-white font-bold uppercase tracking-widest text-xs disabled:opacity-50 transition-all">Eliminar</button>
+            <h2 className="text-2xl font-black uppercase text-white mb-2 text-center underline decoration-sw-red decoration-2 underline-offset-8">Confirmación de Auditoría</h2>
+            <p className="text-gray-400 text-center mb-8 max-w-md text-sm">Esta acción anulará el servicio de la patente <span className="text-white font-mono font-bold">{job.plate}</span>. Quedará registro en el historial de administradores.</p>
+            
+            <div className="w-full max-w-sm space-y-4">
+              <div className="space-y-2">
+                <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest ml-1">Motivo de Anulación</label>
+                <textarea 
+                  placeholder="Ej: Cliente se arrepintió, datos mal ingresados, etc..." 
+                  value={deletionReason} 
+                  onChange={(e) => setDeletionReason(e.target.value)} 
+                  className="w-full bg-black/50 border border-gray-800 text-gray-200 p-4 rounded-xl text-sm focus:border-sw-red focus:ring-1 focus:ring-sw-red outline-none resize-none h-24"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest ml-1">PIN de Seguridad Admin</label>
+                <input 
+                  type="password" 
+                  placeholder="****" 
+                  value={deletePin} 
+                  max={4}
+                  onChange={(e) => setDeletePin(e.target.value)} 
+                  className="w-full bg-black border border-sw-red text-sw-red text-center font-mono text-2xl py-3 rounded-xl tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-sw-red/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <button 
+                  onClick={() => { 
+                    setShowDeleteConfirm(false); 
+                    setDeletePin(''); 
+                    setDeletionReason('');
+                  }} 
+                  className="py-4 rounded-xl border border-gray-800 text-gray-500 hover:bg-gray-800 transition-all font-bold uppercase tracking-widest text-[14px]"
+                >
+                  Regresar
+                </button>
+                <button 
+                  onClick={handleDeleteVehicle} 
+                  disabled={deletePin.length !== 4 || deletionReason.length < 5} 
+                  className="py-4 rounded-xl bg-sw-red text-white font-bold uppercase tracking-widest text-[14px] disabled:opacity-50 disabled:grayscale transition-all shadow-[0_0_20px_rgba(231,76,60,0.3)] hover:shadow-[0_0_30px_rgba(231,76,60,0.5)]"
+                >
+                  Confirmar Anulación
+                </button>
               </div>
             </div>
           </div>
@@ -85,22 +165,22 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Información del Vehículo</div>
+                <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-2">Información del Vehículo</div>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-gray-500">Modelo:</span><span className="text-white font-bold">{job.vehicleModel || 'No especificado'}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-gray-500">Color:</span><span className="text-white font-bold">{job.vehicleColor || 'No especificado'}</span></div>
+                  <div className="flex justify-between text-[14px]"><span className="text-gray-500">Modelo:</span><span className="text-white font-bold">{job.clientVehicleModel || job.vehicleModel || 'No especificado'}</span></div>
+                  <div className="flex justify-between text-[14px]"><span className="text-gray-500">Color:</span><span className="text-white font-bold">{job.vehicleColor || 'No especificado'}</span></div>
                 </div>
               </div>
               <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Datos del Cliente</div>
+                <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-2">Datos del Cliente</div>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs"><span className="text-gray-500">Nombre:</span><span className="text-white font-bold">{job.clientName || 'Cliente'}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-gray-500">Teléfono:</span><span className="text-sw-blue font-mono">{job.clientPhone || 'No registrado'}</span></div>
-                  <div className="flex justify-between text-xs"><span className="text-gray-500">Email:</span><span className="text-gray-300 truncate max-w-[120px]">{job.clientEmail || 'No registrado'}</span></div>
+                  <div className="flex justify-between text-[14px]"><span className="text-gray-500">Nombre:</span><span className="text-white font-bold">{job.clientName || 'Cliente'}</span></div>
+                  <div className="flex justify-between text-[14px]"><span className="text-gray-500">Teléfono:</span><span className="text-sw-blue font-mono">{job.clientPhone || 'No registrado'}</span></div>
+                  <div className="flex justify-between text-[14px]"><span className="text-gray-500">Email:</span><span className="text-gray-300 truncate max-w-[120px]">{job.clientEmail || 'No registrado'}</span></div>
                 </div>
               </div>
               <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Estado Actual</div>
+                <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-2">Estado Actual</div>
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-sw-green animate-pulse"></div>
                   <span className="text-xl font-bold text-white uppercase tracking-widest">{job.status}</span>
@@ -110,13 +190,13 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
             
             <div className="space-y-4">
               <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Servicio</div>
+                <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-2">Servicio</div>
                 <div className="text-lg font-bold text-sw-blue uppercase tracking-wide">{job.serviceName || 'Lavado'}</div>
                 <div className="text-sm font-mono text-sw-green mt-1">${job.serviceTotal.toLocaleString('es-CL')}</div>
               </div>
               <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Tiempos</div>
-                <div className="space-y-2 text-xs font-mono">
+                <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-2">Tiempos</div>
+                <div className="space-y-2 text-[14px] font-mono">
                   <div className="flex justify-between text-gray-400"><span>Ingreso:</span><span className="text-white">{new Date(job.entryDate).toLocaleTimeString()}</span></div>
                   {job.pickupTime && <div className="flex justify-between text-sw-red font-bold"><span>Retiro Est:</span><span>{job.pickupTime}</span></div>}
                   {job.status === 'Listo' && (
@@ -134,14 +214,14 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
                 </div>
               </div>
               <div className={`p-4 rounded-xl border transition-all ${extraFee > 0 ? 'bg-sw-red/5 border-sw-red/20 shadow-[0_0_20px_rgba(239,68,68,0.1)]' : 'bg-sw-green/5 border-sw-green/20'}`}>
-                <div className={`text-xs font-ui font-bold uppercase tracking-[0.1em] mb-2 ${extraFee > 0 ? 'text-sw-red' : 'text-sw-green'}`}>
+                <div className={`text-[14px] font-ui font-bold uppercase tracking-[0.1em] mb-2 ${extraFee > 0 ? 'text-sw-red' : 'text-sw-green'}`}>
                   {extraFee > 0 ? 'Total con Multa' : 'Total Acumulado'}
                 </div>
                 <div className={`text-3xl font-mono font-black ${extraFee > 0 ? 'text-sw-red' : 'text-sw-green'}`}>
                   ${(job.total + extraFee).toLocaleString('es-CL')}
                 </div>
                 {extraFee > 0 && (
-                  <div className="text-[10px] text-sw-red/60 font-bold uppercase mt-1">
+                  <div className="text-[14px] text-sw-red/60 font-bold uppercase mt-1">
                     Incluye ${extraFee.toLocaleString('es-CL')} por sobretiempo
                   </div>
                 )}
@@ -150,7 +230,14 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Notas del Vehículo</h3>
+            <h3 className="text-[14px] font-bold text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Observaciones de Ingreso</h3>
+            <div className="p-4 bg-sw-yellow/5 border border-sw-yellow/20 rounded-xl text-sm text-gray-300 italic">
+              {job.observations || 'Sin observaciones de ingreso.'}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-[14px] font-bold text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Notas de Seguimiento (Internas)</h3>
             <textarea 
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -161,10 +248,10 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800 pb-2 flex items-center gap-2"><Clock size={14} /> LÍNEA DE TIEMPO</h3>
+            <h3 className="text-[14px] font-bold text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800 pb-2 flex items-center gap-2"><Clock size={14} /> LÍNEA DE TIEMPO</h3>
             <div className="space-y-3">
               {job.timeline.map((t: any, i: number) => (
-                <div key={i} className="flex items-center gap-4 text-xs">
+                <div key={i} className="flex items-center gap-4 text-[14px]">
                   <div className="w-20 font-mono text-gray-500">{new Date(t.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
                   <div className="w-2 h-2 rounded-full bg-sw-blue shadow-[0_0_5px_var(--color-sw-blue)]"></div>
                   <div className="flex-1 bg-black/30 p-2 rounded border border-gray-800 font-bold uppercase tracking-widest text-gray-300">{t.status}</div>
@@ -177,7 +264,7 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
         <div className="p-6 border-t border-gray-800 bg-black/50 flex gap-4">
           <button 
             onClick={() => { onClose(); setStoreModalJobId(job.id); }}
-            className="flex-1 py-3 rounded-xl border border-sw-yellow/50 text-sw-yellow hover:bg-sw-yellow/10 transition-all font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-xl border border-sw-yellow/50 text-sw-yellow hover:bg-sw-yellow/10 transition-all font-bold uppercase tracking-widest text-[14px] flex items-center justify-center gap-2"
           >
             <ShoppingCart size={16} /> Tienda
           </button>
@@ -188,7 +275,7 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
                 onClose(); 
                 advanceJobStatus(job.id, job.status); 
               }}
-              className="flex-1 py-3 rounded-xl bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black transition-all font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black transition-all font-bold uppercase tracking-widest text-[14px] flex items-center justify-center gap-2"
             >
               <CheckCircle2 size={16} /> Siguiente Estado
             </button>
@@ -258,7 +345,7 @@ export const QuickStoreModal = ({ jobId, jobs, setJobs, storeProducts, showToast
             <div className="p-3 bg-sw-yellow/10 rounded-xl border border-sw-yellow/30 text-sw-yellow"><ShoppingCart size={24} /></div>
             <div>
               <h2 className="text-xl font-bold sw-title-font text-sw-yellow tracking-widest uppercase">TIENDA IMPERIAL - {job.plate}</h2>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Añadir consumos a la cuenta del vehículo.</p>
+              <p className="text-[14px] text-gray-500 font-bold uppercase tracking-widest">Añadir consumos a la cuenta del vehículo.</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-sw-red/20 hover:text-sw-red rounded-full transition-all text-gray-500"><X size={24} /></button>
@@ -270,10 +357,10 @@ export const QuickStoreModal = ({ jobId, jobs, setJobs, storeProducts, showToast
               <button key={prod.id} onClick={() => addToCart(prod)} className="panel-glass p-4 rounded-xl text-left hover:border-sw-yellow transition-all group flex flex-col justify-between h-32">
                 <div className="flex justify-between items-start">
                   <span className="text-3xl group-hover:scale-110 transition-transform duration-300">{prod.icon}</span>
-                  <span className="text-[10px] font-mono text-gray-500">STK: {prod.stock}</span>
+                  <span className="text-[14px] font-mono text-gray-500">STK: {prod.stock}</span>
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white uppercase tracking-wide line-clamp-1">{prod.name}</div>
+                  <div className="text-[14px] font-bold text-white uppercase tracking-wide line-clamp-1">{prod.name}</div>
                   <div className="text-sm font-mono font-black text-sw-yellow">${prod.price.toLocaleString('es-CL')}</div>
                 </div>
               </button>
@@ -281,25 +368,25 @@ export const QuickStoreModal = ({ jobId, jobs, setJobs, storeProducts, showToast
           </div>
 
           <div className="w-full md:w-80 bg-black/40 border-l border-gray-800 p-6 flex flex-col">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6 border-b border-gray-800 pb-2">CARRITO ACTUAL</h3>
+            <h3 className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-6 border-b border-gray-800 pb-2">CARRITO ACTUAL</h3>
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-6">
               {job.cart.map((item: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-center bg-black/60 p-3 rounded-lg border border-gray-800 group animate-fade-in">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{item.icon}</span>
-                    <span className="text-xs font-bold text-gray-300 uppercase truncate w-24">{item.name}</span>
+                    <span className="text-[14px] font-bold text-gray-300 uppercase truncate w-24">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-sw-yellow">${item.price}</span>
+                    <span className="text-[14px] font-mono font-bold text-sw-yellow">${item.price}</span>
                     <button onClick={() => removeFromCart(idx)} className="text-gray-600 hover:text-sw-red transition-colors"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}
-              {job.cart.length === 0 && <div className="text-center py-12 text-gray-700 text-[10px] font-bold uppercase tracking-[0.2em] italic">Vacío</div>}
+              {job.cart.length === 0 && <div className="text-center py-12 text-gray-700 text-[14px] font-bold uppercase tracking-[0.2em] italic">Vacío</div>}
             </div>
             <div className="pt-4 border-t border-gray-800">
               <div className="flex justify-between items-end mb-6">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total Tienda:</span>
+                <span className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Total Tienda:</span>
                 <span className="text-2xl font-mono font-black text-sw-yellow">${job.storeTotal.toLocaleString('es-CL')}</span>
               </div>
               <button onClick={onClose} className="w-full btn-gold py-3 rounded-xl font-bold uppercase tracking-widest text-sm">FINALIZAR SELECCIÓN</button>
@@ -311,27 +398,72 @@ export const QuickStoreModal = ({ jobId, jobs, setJobs, storeProducts, showToast
   );
 };
 
-export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailModalJobId }: any) => {
+export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailModalJobId, systemSettings, categories, showToast }: any) => {
   const client = clients.find((c: any) => c.id === clientId);
   const [activeTab, setActiveTab] = useState('resumen');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const loyaltyConfig = systemSettings?.loyalty || { enabled: true, requiredVisits: 6, rewardDiscount: 100 };
 
   if (!client) return null;
 
+  const handleStartEdit = () => {
+    setEditData({
+      name: client.name,
+      phone: client.phone,
+      email: client.email,
+      lastVehicleTypeId: client.lastVehicleTypeId || ''
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      await updateDoc(doc(db, 'clients', client.id), editData);
+      showToast('Datos del cliente actualizados', 'success');
+      setIsEditing(false);
+    } catch (e) {
+      showToast('Error al actualizar cliente', 'error');
+    }
+  };
+
   return (
     <div 
-      className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-md"
+      className="fixed inset-0 bg-black/99 z-[100] flex items-center justify-center p-4 backdrop-blur-xl"
       onClick={onClose}
     >
       <div 
-        className="panel-glass rounded-2xl w-full max-w-3xl border border-sw-yellow/30 shadow-[0_0_50px_rgba(255,232,31,0.15)] flex flex-col max-h-[90vh]"
+        className="panel-glass rounded-2xl w-full max-w-3xl border border-sw-yellow/40 shadow-[0_0_80px_rgba(255,232,31,0.2)] flex flex-col max-h-[95vh] relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center p-6 border-b border-gray-800 bg-sw-yellow/5">
-          <div>
-            <h2 className="text-3xl font-mono font-black text-white tracking-tighter">{client.name}</h2>
-            <p className="text-[10px] text-sw-yellow font-bold uppercase tracking-[0.3em]">{client.plate}</p>
+        <div className="flex justify-between items-center p-8 border-b border-gray-800 bg-sw-yellow/5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-5xl font-mono font-black text-sw-blue tracking-tighter leading-none">{client.plate}</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-400 uppercase tracking-[0.3em] font-ui">{client.name}</span>
+              {client.isVIP && <Star size={16} className="text-sw-yellow fill-sw-yellow shadow-lg" />}
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-sw-red/20 hover:text-sw-red rounded-full transition-all text-gray-500"><X size={24} /></button>
+          <div className="flex gap-3">
+            {!isEditing ? (
+              <button 
+                onClick={handleStartEdit}
+                className="p-3 bg-black/40 border border-gray-800 rounded-xl text-gray-400 hover:text-sw-blue hover:border-sw-blue transition-all"
+              >
+                <Edit2 size={24} />
+              </button>
+            ) : (
+              <button 
+                onClick={handleSaveEdit}
+                className="p-3 bg-sw-green text-black rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(46,204,113,0.4)]"
+              >
+                <ShieldCheck size={24} />
+              </button>
+            )}
+            <button onClick={onClose} className="p-3 bg-black/40 border border-gray-800 rounded-xl hover:bg-sw-red/20 hover:text-sw-red transition-all text-gray-500">
+              <X size={24} />
+            </button>
+          </div>
         </div>
         
         <div className="flex border-b border-gray-800">
@@ -348,32 +480,85 @@ export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailM
 
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
           {activeTab === 'resumen' && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Contacto</div>
-                  <div className="text-sm text-white mb-1"><span className="text-gray-500 mr-2">Tel:</span>{client.phone}</div>
-                  <div className="text-sm text-white"><span className="text-gray-500 mr-2">Email:</span>{client.email || 'No registrado'}</div>
+                <div className="bg-black/60 p-6 rounded-2xl border border-gray-800 space-y-4">
+                  <div className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-2">Información del Cliente</div>
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[14px] text-gray-500 font-bold uppercase block mb-1">Nombre</label>
+                        <input type="text" value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} className="w-full bg-black/40 border border-gray-700 rounded-xl p-3 text-white text-sm outline-none focus:border-sw-blue" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[14px] text-gray-500 font-bold uppercase block mb-1">Teléfono</label>
+                          <input type="text" value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} className="w-full bg-black/40 border border-gray-700 rounded-xl p-3 text-white text-sm outline-none font-mono focus:border-sw-blue" />
+                        </div>
+                        <div>
+                          <label className="text-[14px] text-gray-500 font-bold uppercase block mb-1">Email</label>
+                          <input type="email" value={editData.email} onChange={e => setEditData({...editData, email: e.target.value})} className="w-full bg-black/40 border border-gray-700 rounded-xl p-3 text-white text-sm outline-none focus:border-sw-blue" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[14px] text-gray-500 font-bold uppercase block mb-1">Modelo de Vehículo Preferido</label>
+                        <select value={editData.lastVehicleTypeId} onChange={e => setEditData({...editData, lastVehicleTypeId: e.target.value})} className="w-full bg-black/40 border border-gray-700 rounded-xl p-3 text-white text-sm outline-none focus:border-sw-blue appearance-none">
+                          <option value="">Ninguno</option>
+                          {categories.map((cat: any) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex flex-col">
+                        <span className="text-[14px] text-gray-500 uppercase font-black mb-1">Modelo Habitual</span>
+                        <span className="text-sw-blue font-bold tracking-widest text-lg">
+                          {categories.find((c: any) => c.id === client.lastVehicleTypeId)?.name || 'NO REGISTRADO'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col pt-3 border-t border-gray-800/50">
+                        <span className="text-[14px] text-gray-500 uppercase font-bold">Contacto Principal</span>
+                        <div className="text-white text-lg font-bold">{client.phone}</div>
+                        <div className="text-sm text-gray-400 font-mono italic">{client.email || 'Sin email'}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Actividad</div>
-                  <div className="text-sm text-white mb-1"><span className="text-gray-500 mr-2">Visitas:</span><span className="text-sw-yellow font-bold">{client.visits}</span></div>
-                  <div className="text-sm text-white"><span className="text-gray-500 mr-2">Registro:</span>{new Date(client.date).toLocaleDateString('es-CL')}</div>
+                
+                <div className="bg-black/60 p-6 rounded-2xl border border-gray-800 flex flex-col justify-between">
+                  <div>
+                    <div className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-4 border-b border-gray-800 pb-2">Resumen de Actividad</div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-sw-yellow/10 p-4 rounded-xl border border-sw-yellow/20 flex flex-col items-center">
+                        <div className="text-2xl font-black text-sw-yellow font-mono">{client.visits}</div>
+                        <div className="text-[14px] text-sw-yellow uppercase font-black">Visitas</div>
+                      </div>
+                      <div className="bg-sw-blue/10 p-4 rounded-xl border border-sw-blue/20 flex flex-col items-center">
+                        <div className="text-sm font-bold text-white mb-1 uppercase">Fecha Reg.</div>
+                        <div className="text-[14px] font-mono font-bold text-sw-blue">{new Date(client.date).toLocaleDateString('es-CL')}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {isEditing && (
+                    <button onClick={handleSaveEdit} className="w-full mt-4 py-4 bg-sw-green text-black font-black uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(46,204,113,0.3)] hover:scale-105 transition-all">Guardar Cambios</button>
+                  )}
                 </div>
               </div>
 
-              {/* 6+1 Tracker */}
+              {/* Loyalty Tracker */}
+              {loyaltyConfig.enabled && (
               <div className="panel-glass p-6 rounded-2xl border border-gray-800">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-bold text-sw-yellow uppercase tracking-widest flex items-center gap-2">
-                    <CheckCircle2 size={18} /> Progreso Fidelización (6+1: El séptimo lavado es ¡GRATIS!)
+                    <CheckCircle2 size={18} /> Progreso Fidelización (Premio al llegar a {loyaltyConfig.requiredVisits + 1} visitas)
                   </h3>
-                  <span className="text-xs font-mono text-gray-400">{(client.visits % 7) || 0}/6 Visitas</span>
+                  <span className="text-[14px] font-mono text-gray-400">{(client.visits % (loyaltyConfig.requiredVisits + 1))} / {loyaltyConfig.requiredVisits} Visitas</span>
                 </div>
-                <div className="flex gap-2 justify-between max-w-lg mx-auto">
-                  {Array.from({ length: 7 }).map((_, i) => {
-                    const isCompleted = i < (client.visits % 7);
-                    const isGoal = i === 6;
+                <div className="flex gap-2 justify-between max-w-lg mx-auto flex-wrap">
+                  {Array.from({ length: loyaltyConfig.requiredVisits + 1 }).map((_, i) => {
+                    const isCompleted = i < (client.visits % (loyaltyConfig.requiredVisits + 1));
+                    const isGoal = i === loyaltyConfig.requiredVisits;
                     return (
                       <div key={i} className="flex flex-col items-center gap-2">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
@@ -383,26 +568,27 @@ export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailM
                               ? 'bg-sw-yellow/10 border-sw-yellow border-dashed text-sw-yellow' 
                               : 'bg-black/40 border-gray-700 text-gray-600'
                         }`}>
-                          {isCompleted ? <CheckCircle2 size={20} /> : isGoal ? <span className="font-black text-xs">GRATIS</span> : (i + 1)}
+                          {isCompleted ? <CheckCircle2 size={20} /> : isGoal ? <span className="font-black text-[14px]">PREMIO</span> : (i + 1)}
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
+              )}
             </div>
           )}
           {activeTab === 'financiero' && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Total Gastado</div>
+                  <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-1">Total Gastado</div>
                   <div className="text-2xl font-mono font-black text-sw-green">
                     ${jobs?.filter((j: any) => j.plate === client.plate && j.status === 'Entregado').reduce((acc: number, j: any) => acc + (j.total || 0), 0).toLocaleString('es-CL')}
                   </div>
                 </div>
                 <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Ticket Promedio</div>
+                  <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mb-1">Ticket Promedio</div>
                   <div className="text-2xl font-mono font-black text-sw-blue">
                     ${(client.visits > 0 ? (jobs?.filter((j: any) => j.plate === client.plate && j.status === 'Entregado').reduce((acc: number, j: any) => acc + (j.total || 0), 0) / client.visits) : 0).toLocaleString('es-CL', {maximumFractionDigits: 0})}
                   </div>
@@ -443,9 +629,9 @@ export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailM
                 <table className="w-full text-left">
                   <thead className="bg-black/60 border-b border-gray-800">
                     <tr>
-                      <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Fecha</th>
-                      <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Servicio</th>
-                      <th className="p-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Monto</th>
+                      <th className="p-4 text-[14px] font-bold text-gray-500 uppercase tracking-widest">Fecha</th>
+                      <th className="p-4 text-[14px] font-bold text-gray-500 uppercase tracking-widest">Servicio</th>
+                      <th className="p-4 text-[14px] font-bold text-gray-500 uppercase tracking-widest">Monto</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
@@ -457,7 +643,7 @@ export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailM
                       </tr>
                     ))}
                     {!jobs?.find((j: any) => j.plate === client.plate && j.status === 'Entregado') && (
-                      <tr><td colSpan={3} className="p-8 text-center text-gray-600 text-xs font-bold uppercase tracking-widest">Sin historial de pagos registrados</td></tr>
+                      <tr><td colSpan={3} className="p-8 text-center text-gray-600 text-[14px] font-bold uppercase tracking-widest">Sin historial de pagos registrados</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -477,7 +663,7 @@ export const ClientDetailModal = ({ clientId, clients, jobs, onClose, setDetailM
                     onClick={() => {
                       if (!client.phone) return alert('Cliente no tiene teléfono registrado');
                       const phone = client.phone.replace(/\D/g, '');
-                      const msg = encodeURIComponent(`¡Buenas noticias de StarParks CarWash!\n\nEstimado ${client.name}, ¡ha ganado un LAVADO GRATIS! 🎉\nAcaba de completar sus 6 visitas. Lo esperamos para canjear su 7mo lavado 100% gratuito.\n\nMostrando este mensaje en caja validaremos su premio. ¡Gracias por preferirnos!`);
+                      const msg = encodeURIComponent(`¡Buenas noticias de StarParks CarWash!\n\nEstimado ${client.name}, ¡ha ganado un PREMIO! 🎉\nAcaba de completar sus ${loyaltyConfig.requiredVisits} visitas. Lo esperamos para canjear su beneficio en su próxima visita.\n\nMostrando este mensaje en caja validaremos su premio. ¡Gracias por preferirnos!`);
                       window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
                     }}
                     className="bg-sw-green/10 border border-sw-green/50 text-sw-green px-4 py-4 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-sw-green hover:text-black transition-all text-center"
@@ -589,18 +775,14 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
   };
 
   const handleArchiveUser = async () => {
-    if (!window.confirm(`¿Estás seguro de archivar/desactivar a ${user.name}?`)) return;
+    if (!window.confirm(`¿Estás seguro de ELIMINAR PERMANENTEMENTE a ${user.name}? Esta acción no se puede deshacer.`)) return;
     try {
-      await updateDoc(doc(db, 'users', user.id), {
-        isActive: false,
-        active: false,
-        archivedAt: Date.now()
-      });
-      showToast('Usuario archivado (eliminación lógica)', 'success');
+      await deleteDoc(doc(db, 'users', user.id));
+      showToast('Usuario eliminado permanentemente', 'success');
       onClose();
     } catch (e: any) {
-      handleFirestoreError(e, OperationType.UPDATE, 'users');
-      showToast('Error al archivar usuario', 'error');
+      handleFirestoreError(e, OperationType.DELETE, 'users');
+      showToast('Error al eliminar usuario', 'error');
     }
   };
 
@@ -649,7 +831,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
           {/* Hero Section */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
             <div className="space-y-4 flex-1">
-              <div className="inline-block px-4 py-1 rounded-full bg-sw-blue/10 border border-sw-blue/30 text-sw-blue text-xs font-bold uppercase tracking-[0.4em]">
+              <div className="inline-block px-4 py-1 rounded-full bg-sw-blue/10 border border-sw-blue/30 text-sw-blue text-[14px] font-bold uppercase tracking-[0.4em]">
                 {isEditing ? (
                   <select 
                     value={formData.role} 
@@ -689,7 +871,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
           {/* Info Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="panel-glass p-8 rounded-3xl border border-gray-800 space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Correo Electrónico</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Correo Electrónico</label>
               {isEditing ? (
                 <div className="flex gap-2">
                   <input 
@@ -700,7 +882,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
                   />
                   <button 
                     onClick={() => setShowCredentialModal(true)}
-                    className="px-4 bg-sw-blue/20 text-sw-blue rounded-xl border border-sw-blue/30 font-bold text-[10px] uppercase hover:bg-sw-blue hover:text-black transition-all"
+                    className="px-4 bg-sw-blue/20 text-sw-blue rounded-xl border border-sw-blue/30 font-bold text-[14px] uppercase hover:bg-sw-blue hover:text-black transition-all"
                   >
                     Cambiar
                   </button>
@@ -710,7 +892,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
               )}
             </div>
             <div className="panel-glass p-8 rounded-3xl border border-gray-800 space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Identificación (RUT)</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">RUT / Identificación</label>
               {isEditing ? (
                 <input 
                   type="text"
@@ -723,7 +905,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
               )}
             </div>
             <div className="panel-glass p-8 rounded-3xl border border-gray-800 space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Teléfono de Contacto</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Teléfono de Contacto</label>
               {isEditing ? (
                 <input 
                   type="text"
@@ -736,13 +918,13 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
               )}
             </div>
             <div className="panel-glass p-8 rounded-3xl border border-gray-800 space-y-2">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Código PIN / Acceso</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Código PIN / Acceso</label>
               <div className="flex justify-between items-center">
                 <div className="text-xl font-mono text-sw-yellow">****</div>
                 {isEditing && (
                   <button 
                     onClick={() => setShowCredentialModal(true)}
-                    className="px-4 py-1 bg-sw-yellow/10 text-sw-yellow rounded-lg border border-sw-yellow/30 font-bold text-[10px] uppercase hover:bg-sw-yellow hover:text-black transition-all"
+                    className="px-4 py-1 bg-sw-yellow/10 text-sw-yellow rounded-lg border border-sw-yellow/30 font-bold text-[14px] uppercase hover:bg-sw-yellow hover:text-black transition-all"
                   >
                     Cambiar
                   </button>
@@ -754,7 +936,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="panel-glass p-8 rounded-3xl border border-gray-800 space-y-4">
               <div className="flex justify-between items-center">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Notificaciones Habilitadas</label>
+                <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Notificaciones Habilitadas</label>
                 <button 
                   onClick={() => isEditing && handleChange('notifications', !formData.notifications)}
                   className={`w-12 h-6 rounded-full transition-all relative ${formData.notifications ? 'bg-sw-green' : 'bg-gray-700'}`}
@@ -762,10 +944,10 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${formData.notifications ? 'left-7' : 'left-1'}`}></div>
                 </button>
               </div>
-              <p className="text-[10px] text-gray-500 uppercase">Recibir alertas de turnos y reportes vía email</p>
+              <p className="text-[14px] text-gray-500 uppercase">Recibir alertas de turnos y reportes vía email</p>
             </div>
             <div className="panel-glass p-8 rounded-3xl border border-gray-800 space-y-4">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Comentarios / Notas</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Comentarios / Notas</label>
               {isEditing ? (
                 <textarea 
                   value={formData.notes}
@@ -786,19 +968,19 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-4">
                   <Shield size={32} className="text-sw-blue" /> MATRIZ DE FACULTADES
                 </h3>
-                <p className="text-gray-500 text-xs mt-2 uppercase tracking-widest font-bold">
+                <p className="text-gray-500 text-[14px] mt-2 uppercase tracking-widest font-bold">
                   {isEditing ? 'Selecciona los permisos para actualizar el perfil' : 'Consulta los permisos asignados actualmente'}
                 </p>
               </div>
               
               {isEditing && (
                 <div className="flex flex-wrap gap-2">
-                  <span className="text-[10px] text-gray-500 w-full mb-1 uppercase tracking-widest font-black">Presets Rápidos:</span>
+                  <span className="text-[14px] text-gray-500 w-full mb-1 uppercase tracking-widest font-black">Presets Rápidos:</span>
                   {['Cajero', 'Operario', 'Visualizador', 'Admin'].map(r => (
                     <button 
                       key={r}
                       onClick={() => handlePresetApply(r)}
-                      className="px-4 py-2 rounded-xl bg-sw-blue/10 border border-sw-blue/30 text-sw-blue hover:bg-sw-blue hover:text-black transition-all font-bold uppercase text-xs"
+                      className="px-4 py-2 rounded-xl bg-sw-blue/10 border border-sw-blue/30 text-sw-blue hover:bg-sw-blue hover:text-black transition-all font-bold uppercase text-[14px]"
                     >
                       {r}
                     </button>
@@ -822,7 +1004,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
                   >
                     <div className="space-y-1">
                       <div className="text-sm font-black uppercase tracking-tight">{p.label}</div>
-                      <div className="text-[9px] opacity-50 font-bold uppercase tracking-widest">ID: {p.id}</div>
+                      <div className="text-[14px] opacity-50 font-bold uppercase tracking-widest">ID: {p.id}</div>
                     </div>
                     {hasPerm ? <CheckCircle2 size={24} /> : <X size={24} className="opacity-20" />}
                   </div>
@@ -848,7 +1030,7 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
               </div>
               <div className="space-y-2">
                 <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Verificación de Mando</h3>
-                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Ingresa el PIN de Administrador para editar</p>
+                <p className="text-gray-500 text-[14px] font-bold uppercase tracking-widest">Ingresa el PIN de Administrador para editar</p>
               </div>
               
               <input 
@@ -864,13 +1046,13 @@ export const UserDetailModal = ({ userId, users, onClose, isSuperAdmin, togglePe
               <div className="flex gap-4">
                 <button 
                   onClick={() => { setShowPinModal(false); setPin(''); }}
-                  className="flex-1 py-4 rounded-xl border border-gray-800 text-gray-500 font-bold uppercase tracking-widest text-xs hover:text-white transition-all"
+                  className="flex-1 py-4 rounded-xl border border-gray-800 text-gray-500 font-bold uppercase tracking-widest text-[14px] hover:text-white transition-all"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={verifyPin}
-                  className="flex-1 py-4 rounded-xl bg-sw-blue text-black font-bold uppercase tracking-widest text-xs hover:scale-105 transition-all"
+                  className="flex-1 py-4 rounded-xl bg-sw-blue text-black font-bold uppercase tracking-widest text-[14px] hover:scale-105 transition-all"
                 >
                   Confirmar
                 </button>
@@ -928,12 +1110,12 @@ export const CredentialModal = ({ user, onClose, onSave, showToast }: any) => {
       >
         <div className="text-center space-y-2">
           <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Cambiar Credenciales</h3>
-          <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Actualiza el acceso para {user.name}</p>
+          <p className="text-gray-500 text-[14px] font-bold uppercase tracking-widest">Actualiza el acceso para {user.name}</p>
         </div>
 
         <div className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nuevo Correo Electrónico</label>
+            <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Nuevo Correo Electrónico</label>
             <input 
               type="email"
               value={email}
@@ -942,7 +1124,7 @@ export const CredentialModal = ({ user, onClose, onSave, showToast }: any) => {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Confirmar Correo</label>
+            <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Confirmar Correo</label>
             <input 
               type="email"
               value={confirmEmail}
@@ -951,7 +1133,7 @@ export const CredentialModal = ({ user, onClose, onSave, showToast }: any) => {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nueva Contraseña / PIN</label>
+            <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Nueva Contraseña / PIN</label>
             <div className="relative">
               <input 
                 type={showPin ? 'text' : 'password'}
@@ -972,13 +1154,13 @@ export const CredentialModal = ({ user, onClose, onSave, showToast }: any) => {
         <div className="flex gap-4">
           <button 
             onClick={onClose}
-            className="flex-1 py-4 rounded-xl border border-gray-800 text-gray-500 font-bold uppercase tracking-widest text-xs hover:text-white transition-all"
+            className="flex-1 py-4 rounded-xl border border-gray-800 text-gray-500 font-bold uppercase tracking-widest text-[14px] hover:text-white transition-all"
           >
             Cancelar
           </button>
           <button 
             onClick={handleSave}
-            className="flex-1 py-4 rounded-xl bg-sw-blue text-black font-bold uppercase tracking-widest text-xs hover:scale-105 transition-all"
+            className="flex-1 py-4 rounded-xl bg-sw-blue text-black font-bold uppercase tracking-widest text-[14px] hover:scale-105 transition-all"
           >
             Confirmar Cambios
           </button>
@@ -1046,7 +1228,7 @@ export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nombre Completo</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Nombre Completo</label>
               <input 
                 type="text"
                 value={formData.name}
@@ -1055,7 +1237,7 @@ export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">RUT</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">RUT</label>
               <input 
                 type="text"
                 value={formData.rut}
@@ -1066,7 +1248,7 @@ export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Correo Electrónico</label>
+            <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Correo Electrónico</label>
             <input 
               type="email"
               value={formData.email}
@@ -1077,7 +1259,7 @@ export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Teléfono</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Teléfono</label>
               <input 
                 type="text"
                 value={formData.phone}
@@ -1086,7 +1268,7 @@ export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Rol Inicial</label>
+              <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Rol Inicial</label>
               <select 
                 value={formData.role}
                 onChange={(e) => setFormData({...formData, role: e.target.value})}
@@ -1112,13 +1294,15 @@ export const UserCreateModal = ({ onClose, showToast, currentUser, hasPermission
   );
 };
 
-export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, hasPermission }: any) => {
+export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, hasPermission, isAdmin }: any) => {
   const service = services.find((s: any) => s.id === serviceId);
   const [formData, setFormData] = useState({
     name: service?.name || '',
     basePrice: service?.basePrice || 0,
     recipe: service?.recipe || [],
-    estimatedCost: service?.estimatedCost || 0
+    estimatedCost: service?.estimatedCost || 0,
+    type: service?.type || 'Servicio',
+    categoryId: service?.categoryId || ''
   });
 
   const netPrice = Math.round(formData.basePrice / 1.19);
@@ -1144,12 +1328,30 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
       const id = serviceId || `srv_${Date.now()}`;
       await setDoc(doc(db, 'services', id), {
         ...formData,
-        id
+        id,
+        active: true,
+        isActive: true
       });
       showToast(serviceId ? 'Servicio actualizado' : 'Servicio creado', 'success');
       onClose();
     } catch (e) {
       showToast('Error al guardar el servicio', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!isAdmin) {
+      showToast('No tiene permisos para eliminar servicios', 'error');
+      return;
+    }
+    if (!window.confirm(`¿Está seguro de que desea ELIMINAR PERMANENTEMENTE "${formData.name}"?`)) return;
+    try {
+      await deleteDoc(doc(db, 'services', serviceId));
+      showToast('Servicio eliminado', 'success');
+      onClose();
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, 'services');
+      showToast('Error al eliminar', 'error');
     }
   };
 
@@ -1163,7 +1365,7 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
               <h2 className="text-2xl font-black sw-title-font tracking-widest uppercase">
                 {serviceId ? 'Detalle de Servicio' : 'Nuevo Servicio'}
               </h2>
-              <p className="text-[10px] font-mono uppercase tracking-widest text-white">{formData.name || 'Personalizar Parámetros'}</p>
+              <p className="text-[14px] font-mono uppercase tracking-widest text-white">{formData.name || 'Personalizar Parámetros'}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-sw-red transition-colors"><X size={32} /></button>
@@ -1172,10 +1374,10 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
         <div className="p-8 overflow-y-auto custom-scrollbar space-y-8 bg-black/40">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-6">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Configuración Base</h3>
+              <h3 className="text-[14px] font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Configuración Base</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre del Servicio</label>
+                  <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre del Servicio</label>
                   <input 
                     type="text" 
                     value={formData.name}
@@ -1185,7 +1387,7 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 text-sw-green">Precio de Venta Final (IVA Incl.)</label>
+                  <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-1 text-sw-green">Precio de Venta Final (IVA Incl.)</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 font-mono">$</span>
                     <input 
@@ -1200,19 +1402,19 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
             </div>
 
             <div className="space-y-6">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Desglose Tributario y Utilidad</h3>
+              <h3 className="text-[14px] font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Desglose Tributario y Utilidad</h3>
               <div className="panel-glass rounded-2xl border border-gray-800 p-6 space-y-4 shadow-inner">
-                <div className="flex justify-between items-center text-xs font-mono">
+                <div className="flex justify-between items-center text-[14px] font-mono">
                   <span className="text-gray-500">Precio Neto:</span>
                   <span className="text-white">${netPrice.toLocaleString('es-CL')}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs font-mono">
+                <div className="flex justify-between items-center text-[14px] font-mono">
                   <span className="text-gray-500">IVA (19%):</span>
                   <span className="text-white">${iva.toLocaleString('es-CL')}</span>
                 </div>
                 <div className="pt-4 border-t border-gray-800 space-y-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Costo Estimado (Suministros + MO)</label>
+                    <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-1">Costo Estimado (Suministros + MO)</label>
                     <input 
                       type="number" 
                       value={formData.estimatedCost}
@@ -1221,7 +1423,7 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
                     />
                   </div>
                   <div className="flex justify-between items-center p-3 bg-sw-green/5 rounded-xl border border-sw-green/20">
-                    <span className="text-[10px] font-bold text-sw-green uppercase tracking-widest">Utilidad Bruta</span>
+                    <span className="text-[14px] font-bold text-sw-green uppercase tracking-widest">Utilidad Bruta</span>
                     <span className="text-xl font-mono font-black text-sw-green">${utility.toLocaleString('es-CL')}</span>
                   </div>
                 </div>
@@ -1230,24 +1432,32 @@ export const ServiceModal = ({ serviceId, services, jobs, onClose, showToast, ha
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Historial Reciente de Ventas</h3>
+            <h3 className="text-[14px] font-bold text-gray-400 uppercase tracking-[0.2em] border-b border-gray-800 pb-2">Historial Reciente de Ventas</h3>
             <div className="space-y-2">
               {history.length > 0 ? history.map((h: any) => (
                 <div key={h.id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-gray-800">
                   <div className="flex gap-4 items-center">
-                    <span className="font-mono text-sw-blue text-xs">{h.clientPlate}</span>
-                    <span className="text-[10px] text-gray-500">{new Date(h.entryDate).toLocaleDateString()}</span>
+                    <span className="font-mono text-sw-blue text-[14px]">{h.clientPlate}</span>
+                    <span className="text-[14px] text-gray-500">{new Date(h.entryDate).toLocaleDateString()}</span>
                   </div>
                   <span className="font-mono font-bold text-sw-green text-sm">${h.total.toLocaleString('es-CL')}</span>
                 </div>
               )) : (
-                <div className="text-center p-4 bg-black/10 border border-dashed border-gray-800 rounded-xl text-gray-600 text-[10px] font-bold uppercase tracking-widest">Sin registros de venta entregados</div>
+                <div className="text-center p-4 bg-black/10 border border-dashed border-gray-800 rounded-xl text-gray-600 text-[14px] font-bold uppercase tracking-widest">Sin registros de venta entregados</div>
               )}
             </div>
           </div>
 
-          <div className="pt-4">
-            <button onClick={handleSave} className="w-full btn-yoda py-5 rounded-2xl font-black uppercase text-xl tracking-[0.2em] flex justify-center items-center gap-4 shadow-[0_0_30px_rgba(46,204,113,0.3)] hover:scale-[1.02] transition-all active:scale-95">
+          <div className="pt-4 flex gap-4">
+            {serviceId && isAdmin && (
+              <button 
+                onClick={handleDelete} 
+                className="flex-[0.3] bg-black border border-gray-800 hover:border-sw-red hover:text-sw-red text-gray-500 py-3 rounded-2xl font-bold uppercase text-[14px] tracking-widest transition-all flex justify-center items-center gap-2"
+              >
+                <Trash2 size={18} /> Eliminar
+              </button>
+            )}
+            <button onClick={handleSave} className="flex-1 btn-yoda py-5 rounded-2xl font-black uppercase text-xl tracking-[0.2em] flex justify-center items-center gap-4 shadow-[0_0_30px_rgba(46,204,113,0.3)] hover:scale-[1.02] transition-all active:scale-95">
               <ShieldCheck size={28} /> GUARDAR PARÁMETROS
             </button>
           </div>
@@ -1278,10 +1488,10 @@ export const CategoryModal = ({ categoryId, categories, onClose, showToast, hasP
         ...formData,
         id
       });
-      showToast(categoryId ? 'Categoría actualizada' : 'Categoría creada', 'success');
+      showToast(categoryId ? 'Modelo actualizado' : 'Modelo creado', 'success');
       onClose();
     } catch (e) {
-      showToast('Error al guardar la categoría', 'error');
+      showToast('Error al guardar el modelo', 'error');
     }
   };
 
@@ -1290,23 +1500,23 @@ export const CategoryModal = ({ categoryId, categories, onClose, showToast, hasP
       <div className="panel-glass rounded-2xl w-full max-w-md border border-sw-blue/30 shadow-[0_0_50px_rgba(0,168,255,0.15)] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-800 bg-sw-blue/5 flex justify-between items-center">
           <h2 className="text-xl font-bold sw-title-font text-sw-blue tracking-widest uppercase">
-            {categoryId ? 'EDITAR CATEGORÍA' : 'NUEVA CATEGORÍA'}
+            {categoryId ? 'EDITAR MODELO' : 'NUEVO MODELO'}
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-sw-red transition-colors"><X size={24} /></button>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre de la Categoría / Sociedad</label>
+            <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre del Modelo de Vehículo</label>
             <input 
               type="text" 
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
               className="w-full bg-black/40 border border-gray-800 rounded-lg p-3 text-white focus:border-sw-blue outline-none"
-              placeholder="Ej: Convenio Empresa X"
+              placeholder="Ej: CITY CAR, SEDAN, CAMIONETA..."
             />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Factor de Multiplicación</label>
+            <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-1">Ajuste de Precio (Factor)</label>
             <input 
               type="number" 
               step="0.01"
@@ -1314,11 +1524,11 @@ export const CategoryModal = ({ categoryId, categories, onClose, showToast, hasP
               onChange={(e) => setFormData({...formData, factor: Number(e.target.value)})}
               className="w-full bg-black/40 border border-gray-800 rounded-lg p-3 text-white font-mono focus:border-sw-blue outline-none"
             />
-            <p className="text-[10px] text-gray-500 mt-1 italic">1.0 = Precio Normal, 0.8 = 20% Descuento, 1.2 = 20% Recargo</p>
+            <p className="text-[14px] text-gray-500 mt-1 italic">1.0 = Precio Normal, 0.8 = 20% Descuento, 1.2 = 20% Recargo</p>
           </div>
           <div className="pt-4">
             <button onClick={handleSave} className="w-full btn-jedi py-4 rounded-xl font-bold uppercase text-lg tracking-widest flex justify-center items-center gap-3">
-              <ShieldCheck size={24} /> GUARDAR CATEGORÍA
+              <ShieldCheck size={24} /> GUARDAR MODELO
             </button>
           </div>
         </div>
@@ -1327,7 +1537,7 @@ export const CategoryModal = ({ categoryId, categories, onClose, showToast, hasP
   );
 };
 
-export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, onClose, hasPermission }: any) => {
+export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, onClose, hasPermission, clients, systemSettings, currentUser, logSystemAction }: any) => {
   const [payMethod, setPayMethod] = useState(PAYMENT_METHODS[0]);
   const [docType, setDocType] = useState(DOC_TYPES[0]);
   const [discount, setDiscount] = useState(0);
@@ -1335,10 +1545,13 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState('');
   
+  const [showPrintJob, setShowPrintJob] = useState<any>(null);
+  
   const job = jobs.find((j: any) => j.id === jobId);
   if (!job) return null;
 
-  const { extraFee, extraMins } = calculateParkingTimeAndFee(job);
+  const isExpress = jobId.startsWith('VST-') || job.plate === '🏪 VENTA TIENDA';
+  const { extraFee, extraMins } = isExpress ? { extraFee: 0, extraMins: 0 } : calculateParkingTimeAndFee(job);
   const discountAmount = discountType === 'percent' ? (job.total * discount / 100) : discount;
   const finalTotal = Math.max(0, job.total + extraFee - discountAmount);
 
@@ -1359,7 +1572,8 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
     }
     const now = Date.now();
     try {
-      await updateDoc(doc(db, 'jobs', jobId), {
+      const updatedJob = {
+        ...job,
         status: 'Entregado', 
         exitDate: now, 
         paymentMethod: payMethod, 
@@ -1369,27 +1583,171 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
         discount: discountAmount,
         total: finalTotal,
         shiftId: currentShift.id,
-        timeline: [...job.timeline, { status: 'Entregado', timestamp: now, workerId: null }]
-      });
-      showToast(`Misión Finalizada: ${job.plate}`, 'success');
-      
-      // Auto-generate Delivery Voucher
-      generateDeliveryVoucher({
-        ...job,
-        exitDate: now,
+        operatorId: isExpress ? (currentUser?.name || currentUser?.displayName) : (job.operatorId || 'Personal'),
+        timeline: [...(job.timeline || []), { status: 'Entregado', timestamp: now, workerId: null }]
+      };
+
+      await updateDoc(doc(db, 'jobs', jobId), updatedJob);
+
+      // Register financial transaction
+      const txId = `TX-${Date.now()}`;
+      await setDoc(doc(db, 'transactions', txId), {
+        id: txId,
+        jobId: jobId,
+        shiftId: currentShift.id,
+        type: 'income',
+        amount: finalTotal,
         paymentMethod: payMethod,
         docType: docType,
-        parkingFee: extraFee,
-        parkingMins: extraMins,
-        discount: discountAmount,
-        total: finalTotal
+        customerName: updatedJob.clientName || 'Particular',
+        plate: updatedJob.plate,
+        timestamp: now,
+        userId: currentUser?.uid || currentUser?.id,
+        userName: currentUser?.name || currentUser?.displayName,
+        description: isExpress ? `Venta Express: ${jobId}` : `Servicio Carwash: ${jobId} (${updatedJob.plate})`
       });
 
-      onClose();
+      // Log System Action
+      if (logSystemAction) {
+        logSystemAction(
+          isExpress ? 'VENTA_EXPRESS' : 'CHECKOUT_COMPLETADO',
+          `Folio: ${jobId} | Total: $${finalTotal.toLocaleString('es-CL')}`,
+          currentUser?.name || currentUser?.displayName
+        );
+      }
+
+      // 1. Decrement stock for shop products in the cart (Standard and Express Jobs)
+      for (const item of (job.cart || [])) {
+        if (!item.isTypeService && item.id) {
+          try {
+            await updateDoc(doc(db, 'storeProducts', item.id), {
+              stock: increment(-1)
+            });
+          } catch (e) {
+            console.error('Error decrementing stock for:', item.name, e);
+          }
+        }
+      }
+      
+      const client = clients?.find((c: any) => c.plate === job.plate);
+      if (client) {
+        await updateDoc(doc(db, 'clients', client.id), { visits: increment(1) }).catch(console.error);
+      }
+
+      showToast(`Misión Finalizada: ${job.plate}`, 'success');
+      
+      // Set the job to show the print popup instead of auto-generating PDF
+      setShowPrintJob(updatedJob);
     } catch (error) {
       showToast('Error al finalizar', 'error');
     }
   };
+
+  if (showPrintJob) {
+    return (
+      <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-xl">
+        <div className="panel-glass rounded-2xl w-full max-w-sm border border-sw-green/40 shadow-[0_0_30px_rgba(46,204,113,0.1)] flex flex-col overflow-hidden">
+          <div className="bg-white text-black p-6" id="printable-voucher-final">
+            <div className="text-center mb-4 border-b-2 border-black pb-4">
+              <h2 className="text-2xl font-black uppercase">STARPARKS</h2>
+              <p className="text-[14px] font-bold uppercase">{isExpress ? 'Venta Tienda' : 'Carwash Pro - Recibo de Pago'}</p>
+            </div>
+            
+            <div className="space-y-3 text-sm font-mono font-bold mb-6">
+              <div className="flex justify-between border-b border-black/10 pb-1">
+                <span>FOLIO:</span>
+                <span className="text-sm font-black">{showPrintJob.id}</span>
+              </div>
+              
+              <div className="flex flex-col gap-1 border-b border-black/10 pb-1">
+                <span className="text-[14px] text-gray-400 uppercase">Cliente:</span>
+                <div className="flex justify-between">
+                  <span className="uppercase">{showPrintJob.clientName || 'Particular'}</span>
+                  <span>{showPrintJob.clientPhone || ''}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between border-b border-black/10 pb-1">
+                <span>PATENTE:</span>
+                <span className="text-xl font-black">{isExpress ? 'VENTA DIRECTA' : showPrintJob.plate}</span>
+              </div>
+
+              <div className="flex flex-col gap-1 border-b border-black/10 pb-1">
+                <span className="text-[14px] text-gray-400 uppercase">Detalle:</span>
+                <div className="space-y-1">
+                  {(showPrintJob.cart || []).map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between text-xs">
+                      <span className="uppercase">{item.name}</span>
+                      <span>${item.price.toLocaleString('es-CL')}</span>
+                    </div>
+                  ))}
+                  {!showPrintJob.cart?.length && showPrintJob.serviceName && (
+                    <span className="font-black uppercase">{showPrintJob.serviceName}</span>
+                  )}
+                </div>
+              </div>
+
+              {showPrintJob.parkingFee > 0 && (
+                <div className="flex justify-between border-b border-black/10 pb-1">
+                  <span>SOBRETIEMPO:</span>
+                  <span>${showPrintJob.parkingFee.toLocaleString('es-CL')}</span>
+                </div>
+              )}
+
+              {showPrintJob.discount > 0 && (
+                <div className="flex justify-between border-b border-black/10 pb-1 text-sw-red">
+                  <span>DSCTO:</span>
+                  <span>-${showPrintJob.discount.toLocaleString('es-CL')}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-end pt-2">
+                <span className="text-lg">TOTAL:</span>
+                <span className="text-3xl font-black">${showPrintJob.total.toLocaleString('es-CL')}</span>
+              </div>
+              
+              <div className="pt-2 text-[14px] flex justify-between border-t border-black/10 mt-4">
+                <span>MÉTODO: {showPrintJob.paymentMethod}</span>
+                <span>FECHA: {new Date(showPrintJob.exitDate).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            <div className="border-t-2 border-black pt-4 text-center space-y-2">
+              <p className="text-[14px] font-bold uppercase">¡Gracias por su preferencia!</p>
+              <p className="text-[14px] font-bold uppercase">Conserve su recibo para garantías.</p>
+              <p className="text-[14px] font-black uppercase mt-3">PROCESADO POR STARPARKS PRO</p>
+            </div>
+          </div>
+
+          <div className="p-4 flex gap-3 bg-black/60">
+            <button 
+              onClick={onClose} 
+              className="flex-1 bg-gray-900 border border-gray-700 text-gray-400 py-3 rounded-xl font-bold uppercase tracking-widest text-[14px] transition-all hover:border-gray-500"
+            >
+              Cerrar
+            </button>
+            <button
+              onClick={() => {
+                const w = window.open('', '', 'width=400,height=600');
+                const c = document.getElementById('printable-voucher-final');
+                if (w && c) { 
+                  w.document.write(`<html><head><title>Comprobante de Pago</title><style>body{font-family:monospace;padding:0;margin:0 auto;width:58mm;font-size:14px;color:#000}*{box-sizing:border-box}.flex{display:flex}.flex-col{display:flex;flex-direction:column}.gap-1{gap:0.25rem}.justify-between{justify-content:space-between}.items-end{align-items:flex-end}.text-center{text-align:center}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mt-3{margin-top:0.75rem}.pb-4{padding-bottom:1rem}.pt-4{padding-top:1rem}.pb-1{padding-bottom:0.25rem}.border-b-2{border-bottom:2px dashed #000}.border-t-2{border-top:2px dashed #000}.border-b{border-bottom:1px solid #ddd}.border-t{border-top:1px solid #ddd}.text-2xl{font-size:1.5rem}.text-3xl{font-size:1.875rem}.text-xl{font-size:1.25rem}.text-lg{font-size:1.125rem}.text-sm{font-size:0.875rem}.text-xs{font-size:14px}.text-gray-400{color:#666}.font-black{font-weight:900}.font-bold{font-weight:700}.uppercase{text-transform:uppercase}.space-y-3>*{margin-top:0.75rem;margin-bottom:0}.space-y-2>*{margin-top:0.5rem;margin-bottom:0}@page{margin:0;padding:0}@media print{body{width:58mm;margin:0;padding:2mm}}</style></head><body>${c.innerHTML}</body></html>`); 
+                  w.document.close(); 
+                  w.focus(); 
+                  w.print(); 
+                  w.close(); 
+                }
+                onClose();
+              }}
+              className="flex-1 btn-jedi py-3 rounded-xl font-bold uppercase tracking-widest text-[14px]"
+            >
+              Imprimir
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -1414,23 +1772,23 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
 
         <div className="p-8 space-y-6">
           <div className="bg-black/40 p-6 rounded-2xl border border-gray-800 space-y-4">
-            <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-gray-500"><span>Patente</span><span className="text-sw-blue font-mono text-xl">{job.plate}</span></div>
-            <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-gray-500"><span>Servicio</span><span className="text-white">{job.serviceName || 'Lavado'}</span></div>
-            <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-gray-500"><span>Consumo Tienda</span><span className="text-white">${job.storeTotal.toLocaleString('es-CL')}</span></div>
+            <div className="flex justify-between items-center text-[14px] font-bold uppercase tracking-widest text-gray-500"><span>Patente</span><span className="text-sw-blue font-mono text-xl">{job.plate}</span></div>
+            <div className="flex justify-between items-center text-[14px] font-bold uppercase tracking-widest text-gray-500"><span>Servicio</span><span className="text-white">{job.serviceName || 'Lavado'}</span></div>
+            <div className="flex justify-between items-center text-[14px] font-bold uppercase tracking-widest text-gray-500"><span>Consumo Tienda</span><span className="text-white">${job.storeTotal.toLocaleString('es-CL')}</span></div>
             
             <div className="pt-4 border-t border-gray-800 space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Descuento</span>
+                <span className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Descuento</span>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => setDiscountType('fixed')}
-                    className={`px-2 py-1 rounded text-[10px] font-bold border transition-all ${discountType === 'fixed' ? 'bg-sw-blue/20 border-sw-blue text-sw-blue' : 'bg-black/40 border-gray-800 text-gray-600'}`}
+                    className={`px-2 py-1 rounded text-[14px] font-bold border transition-all ${discountType === 'fixed' ? 'bg-sw-blue/20 border-sw-blue text-sw-blue' : 'bg-black/40 border-gray-800 text-gray-600'}`}
                   >
                     $
                   </button>
                   <button 
                     onClick={() => setDiscountType('percent')}
-                    className={`px-2 py-1 rounded text-[10px] font-bold border transition-all ${discountType === 'percent' ? 'bg-sw-blue/20 border-sw-blue text-sw-blue' : 'bg-black/40 border-gray-800 text-gray-600'}`}
+                    className={`px-2 py-1 rounded text-[14px] font-bold border transition-all ${discountType === 'percent' ? 'bg-sw-blue/20 border-sw-blue text-sw-blue' : 'bg-black/40 border-gray-800 text-gray-600'}`}
                   >
                     %
                   </button>
@@ -1447,7 +1805,7 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
                 />
               </div>
               {discount > 0 && (
-                <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-sw-yellow">
+                <div className="flex justify-between items-center text-[14px] font-bold uppercase tracking-widest text-sw-yellow">
                   <span>Total Descuento</span>
                   <span>-${discountAmount.toLocaleString('es-CL')}</span>
                 </div>
@@ -1455,24 +1813,24 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
             </div>
 
             <div className="pt-4 border-t border-gray-800 space-y-2">
-              <div className="flex justify-between items-center text-xs text-gray-400">
-                <span>Subtotal (Neto):</span>
-                <span>${Math.round(finalTotal / 1.19).toLocaleString('es-CL')}</span>
+              <div className="flex justify-between items-center text-[14px] font-bold uppercase tracking-widest text-gray-500">
+                <span>Monto Neto</span>
+                <span className="text-xl font-mono text-gray-400">${Math.round(finalTotal / 1.19).toLocaleString('es-CL')}</span>
               </div>
-              <div className="flex justify-between items-center text-xs text-gray-400">
-                <span>IVA (19%):</span>
-                <span>${(finalTotal - Math.round(finalTotal / 1.19)).toLocaleString('es-CL')}</span>
+              <div className="flex justify-between items-center text-[14px] font-bold uppercase tracking-widest text-gray-500">
+                <span>IVA (19%)</span>
+                <span className="text-xl font-mono text-gray-400">${(finalTotal - Math.round(finalTotal / 1.19)).toLocaleString('es-CL')}</span>
               </div>
-              <div className="flex justify-between items-end pt-2">
-                <span className="text-sm font-bold uppercase tracking-widest text-gray-400">TOTAL A PAGAR</span>
-                <span className="text-4xl font-mono font-black text-sw-green drop-shadow-[0_0_10px_rgba(46,204,113,0.3)]">${finalTotal.toLocaleString('es-CL')}</span>
+              <div className="flex justify-between items-end pt-4 border-t border-gray-800/50 mt-2">
+                <span className="text-sm font-black uppercase tracking-widest text-gray-400">TOTAL A PAGAR</span>
+                <span className="text-5xl font-mono font-black text-sw-green drop-shadow-[0_0_20px_rgba(46,204,113,0.3)]">${finalTotal.toLocaleString('es-CL')}</span>
               </div>
             </div>
           </div>
 
           {showPinModal && (
             <div className="bg-sw-red/10 border border-sw-red/30 p-4 rounded-xl space-y-3">
-              <p className="text-[10px] font-bold text-sw-red uppercase tracking-widest text-center">PIN DE ADMINISTRADOR REQUERIDO</p>
+              <p className="text-[14px] font-bold text-sw-red uppercase tracking-widest text-center">PIN DE ADMINISTRADOR REQUERIDO</p>
               <input 
                 type="password" 
                 value={pin}
@@ -1482,26 +1840,26 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
                 autoFocus
               />
               <div className="flex gap-2">
-                <button onClick={() => { setShowPinModal(false); setDiscount(0); setPin(''); }} className="flex-1 py-2 rounded-lg bg-gray-800 text-gray-400 text-[10px] font-bold uppercase">Cancelar</button>
-                <button onClick={handleFinish} className="flex-1 py-2 rounded-lg bg-sw-red text-white text-[10px] font-bold uppercase">Validar</button>
+                <button onClick={() => { setShowPinModal(false); setDiscount(0); setPin(''); }} className="flex-1 py-2 rounded-lg bg-gray-800 text-gray-400 text-[14px] font-bold uppercase">Cancelar</button>
+                <button onClick={handleFinish} className="flex-1 py-2 rounded-lg bg-sw-red text-white text-[14px] font-bold uppercase">Validar</button>
               </div>
             </div>
           )}
 
           <div className="space-y-4">
              <div>
-               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Medio de Pago</label>
+               <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Medio de Pago</label>
                <div className="grid grid-cols-1 gap-2">
                  {PAYMENT_METHODS.map(m => (
-                   <button key={m} onClick={() => setPayMethod(m)} className={`w-full text-left p-3 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all ${payMethod === m ? 'btn-yoda' : 'bg-black/50 border-gray-800 text-gray-500 hover:border-gray-600'}`}>{m}</button>
+                   <button key={m} onClick={() => setPayMethod(m)} className={`w-full text-left p-3 rounded-lg border text-[14px] font-bold uppercase tracking-widest transition-all ${payMethod === m ? 'btn-yoda' : 'bg-black/50 border-gray-800 text-gray-500 hover:border-gray-600'}`}>{m}</button>
                  ))}
                </div>
              </div>
              <div>
-               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Tipo de Documento</label>
+               <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Tipo de Documento</label>
                <div className="grid grid-cols-3 gap-2">
                  {DOC_TYPES.map(d => (
-                   <button key={d} onClick={() => setDocType(d)} className={`p-2 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all ${docType === d ? 'btn-jedi' : 'bg-black/50 border-gray-800 text-gray-500 hover:border-gray-600'}`}>{d.split(' ')[0]}</button>
+                   <button key={d} onClick={() => setDocType(d)} className={`p-2 rounded-lg border text-[14px] font-bold uppercase tracking-widest transition-all ${docType === d ? 'btn-jedi' : 'bg-black/50 border-gray-800 text-gray-500 hover:border-gray-600'}`}>{d.split(' ')[0]}</button>
                  ))}
                </div>
              </div>
@@ -1514,7 +1872,7 @@ export const CheckoutModal = ({ jobId, jobs, setJobs, currentShift, showToast, o
   );
 };
 
-export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermission }: any) => {
+export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermission, jobs = [], transactions = [] }: any) => {
   const isNew = !item;
   const [name, setName] = useState(item?.name || '');
   const [stock, setStock] = useState(item?.stock || 0);
@@ -1525,6 +1883,68 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
   const [icon, setIcon] = useState(item?.icon || '📦');
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState('');
+
+  const renderChart = () => {
+    if (isNew || type === 'raw') return null;
+
+    const data = [];
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      data.push({
+        dateStr: d.toISOString().split('T')[0],
+        dateLabel: d.toLocaleDateString('es-CL', { month: 'short', day: 'numeric' }),
+        count: 0
+      });
+    }
+
+    jobs.forEach((j: any) => {
+      if (!j.entryDate || !j.cart) return;
+      const jDate = new Date(j.entryDate).toISOString().split('T')[0];
+      const dayData = data.find(d => d.dateStr === jDate);
+      if (dayData) {
+        // Find if this product is in the cart
+        const addon = j.cart.find((cItem: any) => cItem.id === item.id);
+        if (addon) dayData.count += 1;
+      }
+    });
+
+    const totalVentas = data.reduce((acc, curr) => acc + curr.count, 0);
+
+    return (
+      <div className="mt-8 border-t border-gray-800 pt-6">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-sw-yellow mb-4 flex items-center gap-2">
+          <TrendingUp size={16} /> 
+          Ventas últimos 30 días
+        </h3>
+        <div className="mb-4">
+          <span className="text-2xl font-mono font-black text-white">{totalVentas}</span>
+          <span className="text-[14px] text-gray-500 font-bold uppercase tracking-widest ml-2">Unidades vendidas</span>
+        </div>
+        <div className="h-48 w-full bg-black/50 p-4 rounded-xl border border-gray-800">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data}>
+              <defs>
+                <linearGradient id="colorProdSales" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ffe81f" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#ffe81f" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="dateLabel" hide={true} />
+              <YAxis hide={true} />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '8px' }}
+                itemStyle={{ color: '#ffe81f', fontWeight: 'bold' }}
+                formatter={(v: any) => [v, 'Ventas']}
+              />
+              <Area type="monotone" dataKey="count" stroke="#ffe81f" fillOpacity={1} fill="url(#colorProdSales)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
 
   const handleSave = async () => {
     if (stock !== item?.stock || price !== item?.price || unitCost !== item?.unitCost) {
@@ -1565,16 +1985,16 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
   };
 
   const handleDelete = async () => {
-    if (confirm('¿Está seguro de eliminar este item?')) {
+    if (confirm('¿Está seguro de eliminar este item permanentemente? No se podrá recuperar.')) {
       const pinPrompt = window.prompt('Ingrese PIN de Administrador (1124) para eliminar:');
       if (pinPrompt === '1124') {
         try {
           const collectionName = type === 'raw' ? 'rawMaterials' : 'storeProducts';
-          await updateDoc(doc(db, collectionName, item.id), { isActive: false, active: false });
-          showToast('Item eliminado', 'success');
+          await deleteDoc(doc(db, collectionName, item.id));
+          showToast('Item eliminado permanentemente', 'success');
           onClose();
         } catch (e: any) {
-          handleFirestoreError(e, OperationType.UPDATE, type === 'raw' ? 'rawMaterials' : 'storeProducts');
+          handleFirestoreError(e, OperationType.DELETE, type === 'raw' ? 'rawMaterials' : 'storeProducts');
           showToast('Error al eliminar', 'error');
         }
       } else if (pinPrompt !== null) {
@@ -1593,23 +2013,23 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
 
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Nombre</label>
+            <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Nombre</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-yellow outline-none uppercase" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Stock Actual</label>
+              <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Stock Actual</label>
               <input type="number" value={stock} onChange={e => setStock(Number(e.target.value))} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white font-mono focus:border-sw-yellow outline-none" />
             </div>
             {type === 'raw' ? (
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Unidad</label>
+                <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Unidad</label>
                 <input type="text" value={uom} onChange={e => setUom(e.target.value)} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white focus:border-sw-yellow outline-none" />
               </div>
             ) : (
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Icono</label>
+                <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Icono</label>
                 <input type="text" value={icon} onChange={e => setIcon(e.target.value)} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white text-center text-xl focus:border-sw-yellow outline-none" />
               </div>
             )}
@@ -1617,7 +2037,7 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">{type === 'raw' ? 'Costo Unitario' : 'Precio Venta'}</label>
+              <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">{type === 'raw' ? 'Costo Unitario' : 'Precio Venta'}</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-mono">$</span>
                 <input 
@@ -1630,15 +2050,17 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
             </div>
             {type === 'raw' && (
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Punto Reorden</label>
+                <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-2">Punto Reorden</label>
                 <input type="number" value={reorderPoint} onChange={e => setReorderPoint(Number(e.target.value))} className="w-full bg-black/50 border border-gray-800 rounded-xl p-3 text-white font-mono focus:border-sw-yellow outline-none" />
               </div>
             )}
           </div>
 
+          {renderChart()}
+
           {showPinModal && (
             <div className="bg-sw-red/10 border border-sw-red/30 p-4 rounded-xl space-y-3">
-              <p className="text-[10px] font-bold text-sw-red uppercase tracking-widest text-center">PIN DE ADMINISTRADOR REQUERIDO</p>
+              <p className="text-[14px] font-bold text-sw-red uppercase tracking-widest text-center">PIN DE ADMINISTRADOR REQUERIDO</p>
               <input 
                 type="password" 
                 value={pin}
@@ -1648,8 +2070,8 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
                 autoFocus
               />
               <div className="flex gap-2">
-                <button onClick={() => { setShowPinModal(false); setPin(''); }} className="flex-1 py-2 rounded-lg bg-gray-800 text-gray-400 text-[10px] font-bold uppercase">Cancelar</button>
-                <button onClick={handleSave} className="flex-1 py-2 rounded-lg bg-sw-red text-white text-[10px] font-bold uppercase">Validar</button>
+                <button onClick={() => { setShowPinModal(false); setPin(''); }} className="flex-1 py-2 rounded-lg bg-gray-800 text-gray-400 text-[14px] font-bold uppercase">Cancelar</button>
+                <button onClick={handleSave} className="flex-1 py-2 rounded-lg bg-sw-red text-white text-[14px] font-bold uppercase">Validar</button>
               </div>
             </div>
           )}
@@ -1668,6 +2090,81 @@ export const InventoryItemModal = ({ item, type, onClose, showToast, hasPermissi
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+export const CancelJobModal = ({ jobId, jobs, onClose, onConfirm }: any) => {
+  const job = jobs.find((j: any) => j.id === jobId);
+  const [pin, setPin] = useState('');
+  const [reason, setReason] = useState('');
+
+  if (!job) return null;
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-4 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="panel-glass rounded-2xl w-full max-w-md border border-sw-red/30 shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 border-b border-gray-800 bg-sw-red/5">
+          <div className="flex items-center gap-3 text-sw-red mb-1">
+            <XCircle size={24} />
+            <h2 className="text-xl font-bold uppercase tracking-widest sw-title-font">Retirar Vehículo</h2>
+          </div>
+          <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">Patente: {job.plate}</p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="space-y-2">
+            <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest">Motivo del Retiro</label>
+            <textarea 
+              placeholder="Ej: Cliente se arrepintió, espera muy larga..." 
+              value={reason} 
+              onChange={(e) => setReason(e.target.value)} 
+              className="w-full bg-black/50 border border-gray-800 text-gray-200 p-4 rounded-xl text-sm focus:border-sw-red focus:ring-1 focus:ring-sw-red outline-none resize-none h-24"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[14px] font-bold text-gray-500 uppercase tracking-widest text-center">PIN de Seguridad Administrador</label>
+            <div className="relative">
+              <Shield className="absolute left-4 top-1/2 -translate-y-1/2 text-sw-red/40" size={20} />
+              <input 
+                type="password" 
+                placeholder="****" 
+                value={pin} 
+                maxLength={4}
+                onChange={(e) => setPin(e.target.value)} 
+                className="w-full bg-black border border-sw-red/50 text-sw-red text-center font-mono text-2xl py-4 rounded-xl tracking-[0.8em] focus:outline-none focus:ring-4 focus:ring-sw-red/10 pl-12"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-800 flex gap-4 bg-black/20">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-4 rounded-xl border border-gray-800 text-gray-400 hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-[14px]"
+          >
+            Volver
+          </button>
+          <button 
+            onClick={() => onConfirm(jobId, pin, reason)}
+            disabled={pin.length < 4 || reason.length < 5}
+            className="flex-1 py-4 rounded-xl bg-sw-red text-white font-black uppercase tracking-widest text-[14px] disabled:opacity-50 disabled:grayscale transition-all shadow-[0_0_20px_rgba(231,76,60,0.3)]"
+          >
+            Confirmar
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 };

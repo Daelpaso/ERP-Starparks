@@ -200,7 +200,7 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
             <Activity size={32} />
             <div>
               <h2 className="text-2xl font-black sw-title-font tracking-widest uppercase">Historial Z-Report</h2>
-              <p className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-white">ID Auditable: {shift.id}</p>
+              <p className="text-[14px] font-mono font-bold uppercase tracking-[0.2em] text-white">ID Auditable: {shift.id}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -220,19 +220,19 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
             {/* Header Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl border border-gray-800 bg-white/5 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-gray-400"><UserSquare2 size={16}/> <span className="text-[10px] uppercase font-bold tracking-widest">Operador</span></div>
+                <div className="flex items-center gap-2 text-gray-400"><UserSquare2 size={16}/> <span className="text-[14px] uppercase font-bold tracking-widest">Operador</span></div>
                 <div className="font-mono text-sm text-white truncate">{shift.operatorName || shift.openedBy}</div>
               </div>
               <div className="p-4 rounded-xl border border-gray-800 bg-white/5 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-gray-400"><UserSquare2 size={16} className="text-sw-yellow"/> <span className="text-[10px] uppercase font-bold tracking-widest text-sw-yellow">Supervisor Cierre</span></div>
+                <div className="flex items-center gap-2 text-gray-400"><UserSquare2 size={16} className="text-sw-yellow"/> <span className="text-[14px] uppercase font-bold tracking-widest text-sw-yellow">Supervisor Cierre</span></div>
                 <div className="font-mono text-sm text-white truncate">{shift.closedBy || 'Admin System'}</div>
               </div>
               <div className="p-4 rounded-xl border border-gray-800 bg-white/5 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-sw-green"><Clock size={16}/> <span className="text-[10px] uppercase font-bold tracking-widest">Apertura Exacta</span></div>
+                <div className="flex items-center gap-2 text-sw-green"><Clock size={16}/> <span className="text-[14px] uppercase font-bold tracking-widest">Apertura Exacta</span></div>
                 <div className="font-mono text-sm text-white">{new Date(shift.openedAt).toLocaleString('es-CL')}</div>
               </div>
               <div className="p-4 rounded-xl border border-gray-800 bg-white/5 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-sw-red"><Clock size={16}/> <span className="text-[10px] uppercase font-bold tracking-widest">Cierre Exacto</span></div>
+                <div className="flex items-center gap-2 text-sw-red"><Clock size={16}/> <span className="text-[14px] uppercase font-bold tracking-widest">Cierre Exacto</span></div>
                 <div className="font-mono text-sm text-white">{shift.closedAt ? new Date(shift.closedAt).toLocaleString('es-CL') : 'N/A'}</div>
               </div>
             </div>
@@ -240,33 +240,33 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
               {/* KPIs y Auditoría lateral */}
               <div className="lg:col-span-2 space-y-4">
-                <h3 className="text-sw-blue font-bold tracking-widest uppercase text-xs mb-4 border-b border-gray-800 pb-2">KPIs Operativos y Rendimiento</h3>
+                <h3 className="text-sw-blue font-bold tracking-widest uppercase text-[14px] mb-4 border-b border-gray-800 pb-2">KPIs Operativos y Rendimiento</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="panel-glass p-4 rounded-xl text-center border-t border-sw-yellow shadow-[0_-5px_20px_rgba(255,232,31,0.05)]">
-                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-2">Ticket Promedio</div>
+                    <div className="text-[14px] text-gray-400 uppercase font-bold mb-2">Ticket Promedio</div>
                     <div className="text-2xl font-mono font-black text-sw-yellow">${metrics.avgTicket.toLocaleString('es-CL', { maximumFractionDigits: 0 })}</div>
                   </div>
                   <div className="panel-glass p-4 rounded-xl text-center border-t border-sw-blue shadow-[0_-5px_20px_rgba(0,168,255,0.05)]">
-                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-2">Rush Hour</div>
+                    <div className="text-[14px] text-gray-400 uppercase font-bold mb-2">Rush Hour</div>
                     <div className="text-2xl font-mono font-black text-sw-blue">{metrics.rushHour}</div>
                   </div>
                 </div>
 
-                <h3 className="text-sw-red font-bold tracking-widest uppercase text-xs mt-8 mb-4 border-b border-gray-800 pb-2 flex items-center gap-2">
+                <h3 className="text-sw-red font-bold tracking-widest uppercase text-[14px] mt-8 mb-4 border-b border-gray-800 pb-2 flex items-center gap-2">
                   <ShieldAlert size={14}/> Inspección Ciega (Descuadre)
                 </h3>
                 <div className={`p-6 rounded-2xl border ${metrics.cashVariance === 0 ? 'border-sw-green/50 bg-sw-green/5 text-sw-green' : 'border-sw-red bg-sw-red/10 text-sw-red'}`}>
-                  <div className="text-[10px] uppercase font-bold mb-2">Varianza Global Efectivo</div>
+                  <div className="text-[14px] uppercase font-bold mb-2">Varianza Global Efectivo</div>
                   <div className="text-4xl font-mono font-black">${metrics.cashVariance.toLocaleString('es-CL')}</div>
                 </div>
               </div>
 
               {/* Área Financiera Central */}
               <div className="lg:col-span-3 space-y-4">
-                <h3 className="text-sw-blue font-bold tracking-widest uppercase text-xs mb-4 border-b border-gray-800 pb-2">Distribución Exacta de Cuadre Tributario</h3>
+                <h3 className="text-sw-blue font-bold tracking-widest uppercase text-[14px] mb-4 border-b border-gray-800 pb-2">Distribución Exacta de Cuadre Tributario</h3>
                 <div className="overflow-x-auto text-sm font-mono text-left w-full rounded-xl border border-gray-800 bg-black/50 shadow-inner">
                   <table className="w-full">
-                    <thead className="bg-black text-[10px] uppercase tracking-widest text-gray-500">
+                    <thead className="bg-black text-[14px] uppercase tracking-widest text-gray-500">
                       <tr>
                         <th className="p-4">Medio Tributario</th>
                         <th className="p-4 text-right">Acumulado Sist.</th>
@@ -298,18 +298,25 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
                 </div>
 
                 <div className="pt-4 space-y-4">
-                  <h3 className="text-gray-400 font-bold tracking-widest uppercase text-xs mb-4 border-b border-gray-800 pb-2">Log Sistémico de Anulaciones Críticas</h3>
+                  <h3 className="text-gray-400 font-bold tracking-widest uppercase text-[14px] mb-4 border-b border-gray-800 pb-2">Log Sistémico de Anulaciones Críticas</h3>
                   {metrics.voidJobs.length === 0 ? (
-                    <div className="text-center p-4 bg-black/30 border border-gray-800/80 rounded-xl text-gray-600 text-xs uppercase font-bold tracking-widest border-dashed">
+                    <div className="text-center p-4 bg-black/30 border border-gray-800/80 rounded-xl text-gray-600 text-[14px] uppercase font-bold tracking-widest border-dashed">
                       Integridad del Turno Intacta (0 Anulaciones)
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
                        {metrics.voidJobs.map(v => (
-                         <div key={v.id} className="p-3 bg-sw-red/5 border border-sw-red/20 rounded-xl flex justify-between items-center text-xs font-mono transition-transform hover:scale-[1.01]">
-                           <span className="text-sw-red font-bold">Void {v.id.slice(-6)}</span>
-                           <span className="text-gray-400 tracking-widest">{v.clientPlate}</span>
-                           <span className="text-gray-500">{new Date(v.createdAt).toLocaleTimeString()}</span>
+                         <div key={v.id} className="p-3 bg-sw-red/5 border border-sw-red/20 rounded-xl flex flex-col gap-2 transition-transform hover:scale-[1.01]">
+                           <div className="flex justify-between items-center text-[14px] font-mono">
+                             <span className="text-sw-red font-bold">Anulación: {v.plate || v.clientPlate}</span>
+                             <span className="text-gray-500">{new Date(v.deletedAt || v.createdAt).toLocaleString('es-CL')}</span>
+                           </div>
+                           <div className="text-[14px] text-gray-400 bg-black/30 p-4 rounded border border-sw-red/10 italic">
+                             Motivo: {v.deletionReason || 'No especificado'}
+                           </div>
+                           <div className="text-[14px] text-gray-500 uppercase tracking-widest font-bold ml-1">
+                             Autorizado por: {v.deletedBy || 'Admin'}
+                           </div>
                          </div>
                        ))}
                     </div>

@@ -3,7 +3,7 @@ import {
   Menu, X, LayoutDashboard, Wrench, History, Store, Users, Settings, 
   LogOut, Moon, Sun, Zap, Eye, EyeOff, AlertCircle, CheckCircle2, Info, Bell,
   Shield, DollarSign, Package, Clock, ChevronLeft, ChevronRight, Calendar,
-  Accessibility, Type, ZoomIn, ZoomOut, RotateCcw, TrendingUp
+  Accessibility, Type, ZoomIn, ZoomOut, RotateCcw, TrendingUp, Unlock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -20,16 +20,16 @@ import { DailyReportView } from './components/DailyReportView';
 import { POSView } from './components/POSView';
 import { CalendarView } from './components/CalendarView';
 import { AuthGuard } from './components/AuthGuard';
-import { PricingView, ConfigView, UsersView, ClientsView, InventoryView } from './components/AdminViews';
-import { JobDetailModal, QuickStoreModal, CheckoutModal, ClientDetailModal, ServiceModal, CategoryModal, UserDetailModal, UserCreateModal, InventoryItemModal } from './components/Modals';
+import { PricingView, ConfigView, UsersView, ClientsView } from './components/AdminViews';
+import { JobDetailModal, QuickStoreModal, CheckoutModal, ClientDetailModal, ServiceModal, UserDetailModal, UserCreateModal, InventoryItemModal, CancelJobModal } from './components/Modals';
 import { OpenShiftModal, CashMovementModal, CloseShiftModal, ShiftHistoryView } from './components/ShiftManagement';
 import { HistoricalZReportModal } from './components/HistoricalZReportModal';
 
 // Firebase Imports
 import { 
   auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged,
-  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDoc,
-  handleFirestoreError, OperationType
+  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDoc, getDocs,
+  handleFirestoreError, OperationType, limit, orderBy, where, serverTimestamp
 } from './firebase';
 
 // --- Components ---
@@ -45,7 +45,7 @@ const SystemClock = () => {
       <div className="text-xl font-black text-sw-blue tracking-tighter leading-none">
         {time.toLocaleTimeString('es-CL', { hour12: false })}
       </div>
-      <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+      <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest">
         {time.toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' })}
       </div>
     </div>
@@ -91,27 +91,27 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
               className="absolute right-0 mt-3 w-72 panel-glass rounded-2xl border border-sw-blue/30 shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-[70] overflow-hidden"
             >
               <div className="p-4 border-b border-white/10 bg-sw-blue/5">
-                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-sw-blue">Centro de Accesibilidad</h3>
+                <h3 className="text-[14px] font-bold uppercase tracking-[0.2em] text-sw-blue">Centro de Accesibilidad</h3>
               </div>
 
               <div className="p-4 space-y-6">
                 {/* Visual Modes */}
                 <div className="space-y-3">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Modos Visuales</p>
+                  <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Modos Visuales</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => setA11y({...a11y, darkMode: !a11y.darkMode})}
                       className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${a11y.darkMode ? 'bg-sw-yellow/10 border-sw-yellow text-sw-yellow' : 'bg-white/5 border-gray-800 text-gray-400'}`}
                     >
                       {a11y.darkMode ? <Moon size={18} /> : <Sun size={18} />}
-                      <span className="text-xs font-bold uppercase tracking-tighter">{a11y.darkMode ? 'Modo Oscuro' : 'Modo Claro'}</span>
+                      <span className="text-[14px] font-bold uppercase tracking-tighter">{a11y.darkMode ? 'Modo Oscuro' : 'Modo Claro'}</span>
                     </button>
                     <button 
                       onClick={() => setA11y({...a11y, highContrast: !a11y.highContrast})}
                       className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${a11y.highContrast ? 'bg-sw-blue/10 border-sw-blue text-sw-blue' : 'bg-white/5 border-gray-800 text-gray-400'}`}
                     >
                       <Zap size={18} />
-                      <span className="text-xs font-bold uppercase tracking-tighter">Alto Contraste</span>
+                      <span className="text-[14px] font-bold uppercase tracking-tighter">Alto Contraste</span>
                     </button>
                   </div>
                 </div>
@@ -119,10 +119,10 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
                 {/* Font Size */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Tamaño de Texto</p>
+                    <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Tamaño de Texto</p>
                     <button 
                       onClick={() => setA11y({...a11y, fontSize: 'medium'})}
-                      className="text-[10px] font-bold text-sw-blue uppercase tracking-widest hover:underline"
+                      className="text-[14px] font-bold text-sw-blue uppercase tracking-widest hover:underline"
                     >
                       Restablecer
                     </button>
@@ -143,14 +143,14 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
 
                 {/* Motion */}
                 <div className="space-y-3">
-                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Rendimiento</p>
+                  <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest">Rendimiento</p>
                   <button 
                     onClick={() => setA11y({...a11y, reduceMotion: !a11y.reduceMotion})}
                     className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${a11y.reduceMotion ? 'bg-sw-red/10 border-sw-red text-sw-red' : 'bg-white/5 border-gray-800 text-gray-400'}`}
                   >
                     <div className="flex items-center gap-3">
                       <Zap size={18} className={a11y.reduceMotion ? 'rotate-180' : ''} />
-                      <span className="text-xs font-bold uppercase tracking-widest">Reducir Animaciones</span>
+                      <span className="text-[14px] font-bold uppercase tracking-widest">Reducir Animaciones</span>
                     </div>
                     <div className={`w-8 h-4 rounded-full relative transition-all ${a11y.reduceMotion ? 'bg-sw-red' : 'bg-gray-700'}`}>
                       <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${a11y.reduceMotion ? 'left-4.5' : 'left-0.5'}`}></div>
@@ -160,7 +160,7 @@ const A11yMenu = ({ a11y, setA11y }: any) => {
               </div>
 
               <div className="p-3 bg-black/60 text-center">
-                <p className="text-[8px] text-gray-600 font-bold uppercase tracking-[0.2em]">StarParks Accessibility Protocol</p>
+                <p className="text-[14px] text-gray-600 font-bold uppercase tracking-[0.2em]">StarParks Accessibility Protocol</p>
               </div>
             </motion.div>
           </>
@@ -184,17 +184,17 @@ const LoginView = ({ onLogin }: { onLogin: () => void }) => {
           <Zap size={40} className="text-black fill-black" />
         </div>
         <h1 className="text-4xl font-black tracking-tighter sw-title-font leading-none text-white mb-2 text-center">STARPARKS</h1>
-        <p className="text-xs text-sw-yellow font-bold uppercase tracking-[0.3em] mb-12 text-center">Carwash Pro V1</p>
+        <p className="text-[14px] text-sw-yellow font-bold uppercase tracking-[0.3em] mb-12 text-center">Carwash Pro V1</p>
         
         <button 
           onClick={onLogin}
-          className="w-full btn-jedi py-4 rounded-xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 text-sm transition-all hover:scale-105 shadow-[0_0_20px_rgba(0,168,255,0.2)]"
+          className="w-full btn-jedi py-4 rounded-xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 text-[14px] transition-all hover:scale-105 shadow-[0_0_20px_rgba(0,168,255,0.2)]"
         >
           <Users size={20} />
           ACCESO CON GOOGLE
         </button>
         
-        <p className="mt-8 text-xs text-gray-500 font-bold uppercase tracking-widest text-center">
+        <p className="mt-8 text-[14px] text-gray-500 font-bold uppercase tracking-widest text-center">
           Solo personal autorizado. El acceso requiere credenciales de la República.
         </p>
       </motion.div>
@@ -209,8 +209,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('pos');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [showShiftReminder, setShowShiftReminder] = useState(false);
   const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
+  const [longShiftNotify, setLongShiftNotify] = useState(false);
+  const [lastNotificationTime, setLastNotificationTime] = useState<number>(0);
 
   // Auth State
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
@@ -230,6 +231,10 @@ export default function App() {
   const [shiftsAudit, setShiftsAudit] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [systemLogs, setSystemLogs] = useState<any[]>([]);
+  const [systemSettings, setSystemSettings] = useState<any>({
+    loyalty: { enabled: true, requiredVisits: 6, rewardType: 'free_wash', rewardDiscount: 100 }
+  });
   
   // UI State
   const [toast, setToast] = useState<any>(null);
@@ -238,8 +243,8 @@ export default function App() {
   const [serviceModalId, setServiceModalId] = useState<string | null>(null);
   const [userModalId, setUserModalId] = useState<string | null>(null);
   const [showUserCreateModal, setShowUserCreateModal] = useState(false);
-  const [categoryModalId, setCategoryModalId] = useState<string | null>(null);
   const [inventoryModalId, setInventoryModalId] = useState<any>(null); // {id, type: 'raw' | 'store'}
+  const [isShiftsLoaded, setIsShiftsLoaded] = useState(false);
 
   const [shiftElapsed, setShiftElapsed] = useState(0);
 
@@ -270,7 +275,10 @@ export default function App() {
   const [detailModalJobId, setDetailModalJobId] = useState<string | null>(null);
   const [storeModalJobId, setStoreModalJobId] = useState<string | null>(null);
   const [checkoutModalJobId, setCheckoutModalJobId] = useState<string | null>(null);
+  const [cancelJobId, setCancelJobId] = useState<string | null>(null);
   const [confirmReadyJobId, setConfirmReadyJobId] = useState<string | null>(null);
+  const [confirmWashJobId, setConfirmWashJobId] = useState<string | null>(null);
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string>('');
   const [smsNotificationJobId, setSmsNotificationJobId] = useState<string | null>(null);
   const [smsCountdown, setSmsCountdown] = useState(10);
   
@@ -280,23 +288,66 @@ export default function App() {
   const [showZReportModal, setShowZReportModal] = useState<any>(null); // holds the shift object
 
   useEffect(() => {
-    if (!currentShift && isAuthReady && currentUser) {
-      // Show initial reminder
-      setShowShiftReminder(true);
+    if (currentShift && isAuthReady && currentUser) {
+      const FOUR_HOURS = 4 * 60 * 60 * 1000;
+      const THIRTY_MINUTES = 30 * 60 * 1000;
       
-      const interval = setInterval(() => {
-        setShowShiftReminder(true);
-      }, 5 * 60 * 1000); // 5 minutes
+      const checkLongShift = () => {
+        const isOwner = currentShift.openedBy === (currentUser.email || currentUser.id);
+        if (!isOwner) return;
+
+        const now = Date.now();
+        const elapsed = now - currentShift.openedAt;
+
+        if (elapsed >= FOUR_HOURS) {
+          if (!lastNotificationTime || (now - lastNotificationTime >= THIRTY_MINUTES)) {
+            setLongShiftNotify(true);
+            setLastNotificationTime(now);
+            
+            // Auto close after 5 seconds
+            setTimeout(() => {
+              setLongShiftNotify(false);
+            }, 5000);
+          }
+        }
+      };
+
+      const interval = setInterval(checkLongShift, 60000); // Check every minute
+      checkLongShift();
       return () => clearInterval(interval);
     } else {
-      setShowShiftReminder(false);
+      setLongShiftNotify(false);
+      setLastNotificationTime(0);
     }
-  }, [currentShift, isAuthReady, currentUser]);
+  }, [currentShift, isAuthReady, currentUser, lastNotificationTime]);
+
+  useEffect(() => {
+    if (isShiftsLoaded && currentShift) {
+      setShowOpenShiftModal(false);
+    }
+  }, [currentShift, isShiftsLoaded]);
 
   // --- Helpers ---
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const logSystemAction = async (action: string, details: string, approvedBy?: string) => {
+    try {
+      const logId = `log_${Date.now()}`;
+      await setDoc(doc(db, 'system_logs', logId), {
+        id: logId,
+        timestamp: Date.now(),
+        action,
+        details,
+        operatorId: currentUser?.email || currentUser?.id || 'system',
+        operatorName: currentUser?.name || 'Sistema',
+        approvedBy: approvedBy || null
+      });
+    } catch (e) {
+      console.error('Error logging action:', e);
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -367,6 +418,12 @@ export default function App() {
       showToast('No tiene permisos para modificar el taller', 'error');
       return;
     }
+    
+    if (currentStatus === 'Cola') {
+      setConfirmWashJobId(jobId);
+      return;
+    }
+    
     if (currentStatus === 'Lavando') {
       setConfirmReadyJobId(jobId);
       return;
@@ -383,6 +440,47 @@ export default function App() {
     const nextStatus = STATUS_FLOW[currentIndex + 1];
     await addTimelineEvent(jobId, nextStatus);
     showToast(`Vehículo movido a ${nextStatus}`, 'success');
+  };
+
+  const confirmWashStatus = async () => {
+    if (!hasPermission('write_workshop')) {
+      showToast('No tiene permisos para modificar el taller', 'error');
+      return;
+    }
+    if (!confirmWashJobId) return;
+    if (!selectedOperatorId) {
+      showToast('Debe seleccionar un operador para iniciar el lavado', 'error');
+      return;
+    }
+
+    const job = jobs.find(j => j.id === confirmWashJobId);
+    if (!job) return;
+
+    try {
+      const now = Date.now();
+      const updatedTimeline = [...job.timeline, { 
+        status: 'Lavando', 
+        timestamp: now, 
+        workerId: selectedOperatorId 
+      }];
+      
+      const operator = users.find(u => u.id === selectedOperatorId) || 
+                       [{ id: 'op1', name: 'Operador 1' }, { id: 'op2', name: 'Operador 2' }].find(o => o.id === selectedOperatorId);
+
+      await setDoc(doc(db, 'jobs', confirmWashJobId), {
+        ...job,
+        status: 'Lavando',
+        workerId: selectedOperatorId,
+        workerName: operator?.name || 'Operador',
+        timeline: updatedTimeline
+      });
+      
+      setConfirmWashJobId(null);
+      setSelectedOperatorId('');
+      showToast(`Vehículo movido a Lavando bajo supervisión de ${operator?.name || 'Operador'}`, 'success');
+    } catch (error: any) {
+      showToast('Error al actualizar estado', 'error');
+    }
   };
 
   const confirmReadyStatus = async () => {
@@ -410,6 +508,71 @@ export default function App() {
     }
   };
 
+  const handleConfirmCancelJob = async (jobId: string, pin: string, reason: string) => {
+    if (pin !== '1124') {
+      showToast('PIN de Administrador Incorrecto', 'error');
+      return;
+    }
+
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) {
+      setCancelJobId(null);
+      return;
+    }
+
+    try {
+      const now = Date.now();
+      const txId = `tx_cancel_${now}`;
+      
+      // 1. Log in transactions if shift is open
+      if (currentShift?.status === 'open') {
+        await setDoc(doc(db, 'transactions', txId), {
+          id: txId,
+          shiftId: currentShift.id,
+          type: 'expense',
+          amount: 0,
+          reason: `RETIRO/CANCELACIÓN: ${job.plate} - ${reason}`,
+          timestamp: now,
+          userId: currentUser?.id || 'system',
+          jobId: job.id,
+          isCancellation: true
+        });
+      }
+
+      // 2. Mark job as Anulado
+      await updateDoc(doc(db, 'jobs', jobId), { 
+        status: 'Anulado',
+        isActive: false,
+        active: false,
+        cancelledAt: now,
+        cancelledBy: currentUser?.email || currentUser?.id || 'system',
+        cancelReason: reason,
+        timeline: [
+          ...(job.timeline || []),
+          {
+            status: 'Anulado',
+            timestamp: now,
+            workerId: currentUser?.id || 'system',
+            note: `Retirado de Cola. Motivo: ${reason}`
+          }
+        ]
+      });
+
+      // 3. Log System Action
+      logSystemAction(
+        'RETIRO_VEHICULO',
+        `Folio: ${jobId} | Patente: ${job.plate} | Motivo: ${reason}`,
+        currentUser?.name || currentUser?.displayName
+      );
+
+      setCancelJobId(null);
+      showToast('Vehículo retirado exitosamente', 'success');
+    } catch (error: any) {
+      console.error(error);
+      showToast('Error al retirar vehículo', 'error');
+    }
+  };
+
   useEffect(() => {
     let timer: any;
     if (smsNotificationJobId && smsCountdown > 0) {
@@ -422,6 +585,54 @@ export default function App() {
   }, [smsNotificationJobId, smsCountdown]);
 
   // --- Effects ---
+  const cleanupPerformed = React.useRef(false);
+  useEffect(() => {
+    if (cleanupPerformed.current || !isAuthReady || !firebaseUser) return;
+    cleanupPerformed.current = true;
+    
+    const runCleanup = async () => {
+      const targetIds = [
+        'TKT-260512-00002',
+        'TKT-260512-00001',
+        'TRX-1778515626735-232',
+        'TKT-260511-2117',
+        'TKT-260511-5224',
+        'TKT-260511-6034',
+        'TKT-260512-1945',
+        'TRX-1778551706549-416',
+        'TRX-1778551719237-948',
+        'VST-260512-00001',
+        'VST-260512-00002'
+      ];
+      const collections = ['jobs', 'transactions', 'shifts', 'clients', 'shifts_audit', 'calendarEvents'];
+      
+      try {
+        let deletedCount = 0;
+        for (const col of collections) {
+          for (const id of targetIds) {
+            const docRef = doc(db, col, id);
+            const d = await getDoc(docRef);
+            if (d.exists()) {
+              await deleteDoc(docRef);
+              deletedCount++;
+            }
+          }
+        }
+
+        // Reset Ticket Counters to restart sequence
+        await setDoc(doc(db, 'settings', 'ticket_counters'), { TKT: 0, VST: 0 });
+
+        if (deletedCount > 0) {
+          showToast(`Se eliminaron ${deletedCount} registros y se reinició la secuencia de tickets.`, 'success');
+        }
+        console.log('Robust cleanup and counter reset finished, deleted:', deletedCount);
+      } catch (e) {
+        console.error('Cleanup error:', e);
+      }
+    };
+    runCleanup();
+  }, [isAuthReady, firebaseUser]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -490,78 +701,219 @@ export default function App() {
     if (!isAuthReady || !firebaseUser) return;
 
     // Subscriptions to Firestore
-    const unsubJobs = onSnapshot(collection(db, 'jobs'), (snapshot) => {
+    
+    // 1. JOBS: Limit to 1000 to ensure plenty of capacity.
+    const jobsQuery = query(collection(db, 'jobs'), orderBy('entryDate', 'desc'), limit(1000));
+    const unsubJobs = onSnapshot(jobsQuery, (snapshot) => {
       setJobs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'jobs'));
 
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'clients'));
-
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
-
-    const unsubServices = onSnapshot(collection(db, 'services'), (snapshot) => {
-      setServices(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'services'));
-
-    const unsubStore = onSnapshot(collection(db, 'storeProducts'), (snapshot) => {
-      setStoreProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'storeProducts'));
-
-    const unsubRaw = onSnapshot(collection(db, 'rawMaterials'), (snapshot) => {
-      setRawMaterials(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'rawMaterials'));
-
-    const unsubShifts = onSnapshot(collection(db, 'shifts'), (snapshot) => {
-      setShifts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'shifts'));
-
-    const unsubTransactions = onSnapshot(collection(db, 'transactions'), (snapshot) => {
+    // 2. TRANSACTIONS: Limit to last 500
+    const transQuery = query(collection(db, 'transactions'), orderBy('date', 'desc'), limit(500));
+    const unsubTransactions = onSnapshot(transQuery, (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
 
-    const unsubCategories = onSnapshot(collection(db, 'categories'), (snapshot) => {
+    // 3. SHIFTS: Limit to last 100
+    const shiftsQuery = query(collection(db, 'shifts'), orderBy('openedAt', 'desc'), limit(100));
+    const unsubShifts = onSnapshot(shiftsQuery, (snapshot) => {
+      setShifts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setIsShiftsLoaded(true);
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'shifts'));
+
+    // 4. USERS, SERVICES, CATEGORIES, STORE, RAW: Usually small, but good to keep clean
+    const clientsQuery = query(collection(db, 'clients'), orderBy('date', 'desc'), limit(500));
+    const unsubClients = onSnapshot(clientsQuery, (snapshot) => {
+      setClients(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'clients'));
+
+    const unsubUsers = onSnapshot(query(collection(db, 'users'), limit(100)), (snapshot) => {
+      setUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
+
+    const unsubServices = onSnapshot(query(collection(db, 'services'), limit(200)), (snapshot) => {
+      setServices(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'services'));
+
+    const unsubStore = onSnapshot(query(collection(db, 'storeProducts'), limit(200)), (snapshot) => {
+      setStoreProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'storeProducts'));
+
+    const unsubRaw = onSnapshot(query(collection(db, 'rawMaterials'), limit(200)), (snapshot) => {
+      setRawMaterials(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'rawMaterials'));
+
+    const unsubCategories = onSnapshot(query(collection(db, 'categories'), limit(50)), (snapshot) => {
       setCategories(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'categories'));
 
+    // 5. AUDIT: Only for admins, limited to last 100
     let unsubAudit = () => {};
     if (currentUser?.role === 'Admin') {
-      unsubAudit = onSnapshot(collection(db, 'shifts_audit'), (snapshot) => {
+      const auditQuery = query(collection(db, 'shifts_audit'), orderBy('timestamp', 'desc'), limit(100));
+      unsubAudit = onSnapshot(auditQuery, (snapshot) => {
         setShiftsAudit(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       }, (error) => handleFirestoreError(error, OperationType.GET, 'shifts_audit'));
     }
 
-    const unsubCalendar = onSnapshot(collection(db, 'calendarEvents'), (snapshot) => {
+    // 6. CALENDAR & SETTINGS
+    const calendarQuery = query(collection(db, 'calendarEvents'), orderBy('date', 'desc'), limit(150));
+    const unsubCalendar = onSnapshot(calendarQuery, (snapshot) => {
       setCalendarEvents(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'calendarEvents'));
 
-    return () => {
-      unsubJobs(); unsubClients(); unsubUsers(); unsubServices(); unsubStore(); unsubRaw(); unsubShifts(); unsubTransactions(); unsubCategories(); unsubAudit(); unsubCalendar();
-    };
-  }, [isAuthReady, firebaseUser]);
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemSettings(docSnap.data());
+      } else {
+        const defaultSettings = { loyalty: { enabled: true, requiredVisits: 6, rewardType: 'free_wash', rewardDiscount: 100 } };
+        setDoc(doc(db, 'settings', 'global'), defaultSettings).catch(console.error);
+        setSystemSettings(defaultSettings);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/global'));
 
-  // Seed initial data if empty (only Admin)
+    return () => {
+      unsubJobs(); 
+      unsubClients(); 
+      unsubUsers(); 
+      unsubServices(); 
+      unsubStore(); 
+      unsubRaw(); 
+      unsubShifts(); 
+      unsubTransactions(); 
+      unsubCategories(); 
+      if (unsubAudit) unsubAudit(); 
+      unsubCalendar();
+      unsubSettings();
+    };
+  }, [isAuthReady, firebaseUser, currentUser?.role]);
+
+  // Unified Master Data Management (Initialization)
   useEffect(() => {
-    const seedData = async () => {
-      if (currentUser?.role === 'Admin' && services.length === 0 && storeProducts.length === 0) {
+    if (!isAuthReady || !currentUser || currentUser.role !== 'Admin') return;
+
+    const runMasterDataManagement = async () => {
+      const lastSync = localStorage.getItem('LAST_MASTER_DATA_SYNC');
+      
+      // Initial Seed: Only if everything is totally empty and never synced
+      if (services.length === 0 && storeProducts.length === 0 && !lastSync) {
         try {
+          showToast('Inicializando sistema...', 'info');
           for (const srv of INITIAL_SERVICES) await setDoc(doc(db, 'services', srv.id), srv);
           for (const prod of INITIAL_STORE_PRODUCTS) await setDoc(doc(db, 'storeProducts', prod.id), prod);
           for (const raw of INITIAL_RAW_MATERIALS) await setDoc(doc(db, 'rawMaterials', raw.id), raw);
           for (const cat of INITIAL_CATEGORIES) await setDoc(doc(db, 'categories', cat.id), cat);
-          for (const cli of INITIAL_CLIENTS) await setDoc(doc(db, 'clients', cli.id), cli);
-          showToast('Base de datos inicializada con datos maestros', 'success');
-        } catch (e) {
-          console.error("Error seeding data", e);
+          localStorage.setItem('LAST_MASTER_DATA_SYNC', Date.now().toString());
+          showToast('Datos maestros cargados.', 'success');
+        } catch (e) { console.error('Initial seed failed:', e); }
+      }
+
+      // Migration: Create specific operator users
+      const newOperators = [
+        {
+          email: 'navarrorail636@gmail.com',
+          name: 'Raul Navarro',
+          rut: '18000000-3',
+          phone: '999999999',
+          role: 'Operario'
+        },
+        {
+          email: 'amoya0150@gmail.com',
+          name: 'Alonso Moya',
+          rut: '19999999-9',
+          phone: '988888888',
+          role: 'Operario'
+        }
+      ];
+
+      for (const op of newOperators) {
+        // Look for existing user by email
+        const existingOp = users.find(u => u.email === op.email);
+        if (!existingOp) {
+          try {
+            // Use email as a deterministic ID or generate one
+            const opId = `op_${op.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            await setDoc(doc(db, 'users', opId), {
+              ...op,
+              id: opId,
+              active: true,
+              createdAt: serverTimestamp()
+            });
+            console.log(`[Migration] Created operator: ${op.name}`);
+          } catch (err) {
+            console.error(`[Migration] Failed to create operator ${op.name}:`, err);
+          }
+        }
+      }
+
+      // Migration: Remove obsolete services
+      const obsoleteServiceIds = ['srv_ext_simple', 'srv_full_cera'];
+      const obsoleteNames = ['LAVADO EXTERIOR SIMPLE', 'LAVADO FULL + CERA'];
+      
+      for (const srv of services) {
+        if (obsoleteServiceIds.includes(srv.id) || obsoleteNames.includes((srv.name || '').toUpperCase())) {
+          try {
+            await deleteDoc(doc(db, 'services', srv.id));
+            console.log(`[Migration] Removed obsolete service: ${srv.name} (${srv.id})`);
+          } catch (err) {
+            console.error(`[Migration] Failed to remove ${srv.id}:`, err);
+          }
+        }
+      }
+
+      // Migration: History Cleanup (Operations, Transactions, Shifts)
+      const CLEANUP_KEY = 'HISTORY_CLEANUP_2026_05_06';
+      if (!localStorage.getItem(CLEANUP_KEY)) {
+        try {
+          showToast('Limpiando historial de operaciones...', 'info');
+          const collectionsToClean = ['jobs', 'transactions', 'shifts', 'shifts_audit', 'calendarEvents'];
+          
+          for (const colName of collectionsToClean) {
+            const snapshot = await getDocs(collection(db, colName));
+            const deletePromises = snapshot.docs.map(document => deleteDoc(doc(db, colName, document.id)));
+            await Promise.all(deletePromises);
+            console.log(`[Cleanup] Cleared collection: ${colName}`);
+          }
+          
+          localStorage.setItem(CLEANUP_KEY, 'true');
+          showToast('Historial de operaciones eliminado con éxito.', 'success');
+        } catch (err) {
+          console.error('[Cleanup] Failed to clear history:', err);
+          showToast('Error al limpiar historial.', 'error');
+        }
+      }
+
+      // Migration: Move specific services to Complementaries if they are miscategorized
+      const MisplacedServiceNames = [
+        'LAVADO DE MOTOR', 
+        'LIMPIEZA DE TAPIZ FULL', 
+        'PULIDO DE FOCOS'
+      ];
+      
+      const servicesToFix = services.filter(s => {
+        const name = (s.name || '').toUpperCase();
+        return MisplacedServiceNames.includes(name) && (s.type === 'Servicio' || !s.type);
+      });
+
+      if (servicesToFix.length > 0) {
+        try {
+          for (const s of servicesToFix) {
+            await updateDoc(doc(db, 'services', s.id), { 
+              type: 'Adicional', 
+              categoryId: 'ALL' // Make them available for all vehicle types as they are add-ons
+            });
+          }
+          console.log(`[Migration] Fixed ${servicesToFix.length} misplaced services.`);
+        } catch (err) {
+          console.error('[Migration] Failed to fix services:', err);
         }
       }
     };
-    if (isAuthReady && currentUser) {
-      seedData();
-    }
-  }, [isAuthReady, currentUser, services.length, storeProducts.length]);
+
+    // Delay initial run slightly to ensure state is populated from onSnapshot
+    const timeout = setTimeout(runMasterDataManagement, 3000);
+    return () => clearTimeout(timeout);
+  }, [isAuthReady, currentUser?.id, services.length === 0, storeProducts.length === 0]); // Re-run if empty or user changes
 
   useEffect(() => {
     const body = document.body;
@@ -581,8 +933,7 @@ export default function App() {
     { id: 'calendario', label: 'Calendario', icon: Calendar, permission: null },
     { id: 'hist', label: 'Historial', icon: History, permission: null },
     { id: 'reportes', label: 'Reportes', icon: TrendingUp, permission: 'view_reports' },
-    { id: 'inventario', label: 'Inventario', icon: Package, permission: 'edit_inventory' },
-    { id: 'config', label: 'Tarifario de servicios', icon: Settings, permission: null },
+    { id: 'config', label: 'Configuraciones', icon: Settings, permission: null },
   ];
 
   if (!isAuthReady) {
@@ -635,6 +986,29 @@ export default function App() {
     }
   };
 
+  const syncMasterData = async () => {
+    if (!window.confirm('¿Desea restablecer el Tarifario, Insumos y Categorías con los Datos Maestros del sistema? Esto eliminará cualquier personalización actual de precios y productos.')) return;
+    try {
+      showToast('Sincronizando con Datos Maestros...', 'info');
+      // Delete old
+      for (const s of services) await deleteDoc(doc(db, 'services', s.id));
+      for (const c of categories) await deleteDoc(doc(db, 'categories', c.id));
+      for (const r of rawMaterials) await deleteDoc(doc(db, 'rawMaterials', r.id));
+      for (const p of storeProducts) await deleteDoc(doc(db, 'storeProducts', p.id));
+
+      // Seed new
+      for (const srv of INITIAL_SERVICES) await setDoc(doc(db, 'services', srv.id), srv);
+      for (const prod of INITIAL_STORE_PRODUCTS) await setDoc(doc(db, 'storeProducts', prod.id), prod);
+      for (const raw of INITIAL_RAW_MATERIALS) await setDoc(doc(db, 'rawMaterials', raw.id), raw);
+      for (const cat of INITIAL_CATEGORIES) await setDoc(doc(db, 'categories', cat.id), cat);
+
+      showToast('Sincronización completada con éxito', 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, 'master_data');
+      showToast('Error en la sincronización', 'error');
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col relative overflow-hidden">
       {/* Background Elements */}
@@ -681,7 +1055,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-black tracking-tighter sw-title-font leading-none sw-title group-hover:text-white transition-colors">STARPARKS</h1>
-              <p className="text-xs text-sw-yellow font-bold uppercase tracking-[0.3em] mt-0.5">Carwash Pro V1</p>
+              <p className="text-[14px] text-sw-yellow font-bold uppercase tracking-[0.3em] mt-0.5">Carwash Pro V1</p>
             </div>
           </div>
         </div>
@@ -692,7 +1066,7 @@ export default function App() {
           <div className="flex items-center gap-4 border-l border-gray-800 pl-8">
             <div className="text-right">
               <div className="text-sm font-bold text-white uppercase tracking-widest">{currentUser.name}</div>
-              <div className="text-xs text-sw-blue font-bold uppercase tracking-widest">{currentUser.role}</div>
+              <div className="text-[14px] text-sw-blue font-bold uppercase tracking-widest">{currentUser.role}</div>
             </div>
             <button 
               onClick={handleLogout}
@@ -735,7 +1109,7 @@ export default function App() {
                     onClick={() => { setActiveTab(item.id); setIsSidebarOpen(false); }}
                     disabled={!isAllowed}
                     title={isSidebarCollapsed ? item.label : ''}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-xl font-ui font-bold uppercase tracking-widest text-sm transition-all border ${
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'justify-start gap-4 px-4'} py-3.5 rounded-xl font-ui font-bold uppercase tracking-widest text-sm transition-all border ${
                       activeTab === item.id 
                         ? 'bg-sw-blue/10 border-sw-blue text-sw-blue shadow-[0_0_15px_rgba(0,168,255,0.1)]' 
                         : isAllowed 
@@ -744,7 +1118,7 @@ export default function App() {
                     }`}
                   >
                     <item.icon size={20} className="shrink-0" />
-                    {!isSidebarCollapsed && <span>{item.label}</span>}
+                    {!isSidebarCollapsed && <span className="text-left flex-1">{item.label}</span>}
                     {!isAllowed && !isSidebarCollapsed && <Shield size={14} className="ml-auto text-sw-red" />}
                     
                     {/* Active Indicator Bar */}
@@ -775,13 +1149,13 @@ export default function App() {
                       <Clock size={14} /> Tiempo Transcurrido
                     </div>
                   )}
-                  <div className={`${isSidebarCollapsed ? 'text-xs' : 'text-xl'} font-mono font-black ${currentShift ? 'text-sw-green' : 'text-gray-600'} tracking-wider text-center`}>
+                  <div className={`${isSidebarCollapsed ? 'text-[14px]' : 'text-xl'} font-mono font-black ${currentShift ? 'text-sw-green' : 'text-gray-600'} tracking-wider text-center`}>
                     {currentShift ? (isSidebarCollapsed ? formatShiftTime(shiftElapsed).split(':').slice(0,2).join(':') : formatShiftTime(shiftElapsed)) : '--:--:--'}
                   </div>
                   {!isSidebarCollapsed && currentShift && (
                     <div className="text-sm text-gray-500 font-mono mt-1 text-center">
                       Inicio: {new Date(currentShift.openedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      {currentShift.operatorName && <span className="block text-xs text-sw-blue mt-0.5">{currentShift.operatorName}</span>}
+                      {currentShift.operatorName && <span className="block text-[14px] text-sw-blue mt-0.5">{currentShift.operatorName}</span>}
                     </div>
                   )}
                 </div>
@@ -843,15 +1217,28 @@ export default function App() {
                     showToast={showToast} setActiveTab={setActiveTab} 
                     hasPermission={hasPermission}
                     currentShift={currentShift}
+                    systemSettings={systemSettings}
+                    setCheckoutModalJobId={setCheckoutModalJobId}
+                    currentUser={currentUser}
                   />
                 </AuthGuard>
               )}
               {activeTab === 'taller' && (
                 <AuthGuard currentUser={currentUser} hasPermission={hasPermission}>
                   <WorkshopView 
-                    jobs={jobs} advanceJobStatus={advanceJobStatus} 
+                    jobs={jobs} clients={clients} advanceJobStatus={advanceJobStatus} 
                     setStoreModalJobId={setStoreModalJobId} setDetailModalJobId={setDetailModalJobId} 
                     addTimelineEvent={addTimelineEvent}
+                    onCancelJob={(jobId: string) => {
+                      setDetailModalJobId(jobId);
+                      // By setting the detail modal, the user can use the delete button inside it.
+                      // However, the user asked for a direct option on the card.
+                      // I will implement a separate state to show a quick cancel confirmation
+                      // or just leverage the detail modal's existing logic by auto-triggering the delete view?
+                      // Actually, let's just make a dedicated cancel state in App.tsx.
+                      setCancelJobId(jobId);
+                    }}
+                    isAdmin={currentUser?.role === 'Admin' || currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'starparkiquique@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com'}
                   />
                 </AuthGuard>
               )}
@@ -864,12 +1251,15 @@ export default function App() {
                     setClientModalId={setClientModalId} 
                     resetDatabase={resetDatabase}
                     isAdmin={currentUser?.role === 'Admin'}
+                    systemSettings={systemSettings}
+                    categories={categories}
+                    jobs={jobs}
                   />
                 </AuthGuard>
               )}
               {activeTab === 'calendario' && (
                 <AuthGuard currentUser={currentUser} hasPermission={hasPermission}>
-                  <CalendarView events={calendarEvents} showToast={showToast} currentUser={currentUser} />
+                  <CalendarView jobs={jobs} setDetailModalJobId={setDetailModalJobId} />
                 </AuthGuard>
               )}
               {activeTab === 'hist' && (
@@ -884,6 +1274,7 @@ export default function App() {
                 <AuthGuard currentUser={currentUser} requiredPermission="view_reports" hasPermission={hasPermission}>
                   <DailyReportView 
                     jobs={jobs} 
+                    clients={clients}
                     transactions={transactions} 
                     shifts={shifts} 
                     onShowZReport={setShowZReportModal} 
@@ -897,20 +1288,8 @@ export default function App() {
                     setStoreProducts={setStoreProducts}
                     hasPermission={hasPermission}
                     setServiceModalId={setServiceModalId}
-                    setCategoryModalId={setCategoryModalId}
-                  />
-                </AuthGuard>
-              )}
-              {activeTab === 'inventario' && (
-                <AuthGuard currentUser={currentUser} requiredRole="Admin" hasPermission={hasPermission}>
-                  <InventoryView 
-                    rawMaterials={rawMaterials} 
-                    setRawMaterials={setRawMaterials} 
-                    storeProducts={storeProducts} 
-                    setStoreProducts={setStoreProducts} 
-                    showToast={showToast} 
-                    hasPermission={hasPermission} 
-                    setInventoryModalId={setInventoryModalId}
+                    systemLogs={systemLogs}
+                    logSystemAction={logSystemAction}
                   />
                 </AuthGuard>
               )}
@@ -923,6 +1302,7 @@ export default function App() {
                     users={users}
                     setUsers={setUsers}
                     currentUser={currentUser}
+                    isAdmin={currentUser?.role === 'Admin' || currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'starparkiquique@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com'}
                     setUserModalId={setUserModalId}
                     setShowUserCreateModal={setShowUserCreateModal}
                     hasPermission={hasPermission}
@@ -935,6 +1315,20 @@ export default function App() {
                       setImpersonatedUserId(id);
                       window.location.reload();
                     }}
+                    systemSettings={systemSettings}
+                    services={services}
+                    setServices={setServices}
+                    categories={categories}
+                    syncMasterData={syncMasterData}
+                    rawMaterials={rawMaterials}
+                    setRawMaterials={setRawMaterials}
+                    storeProducts={storeProducts}
+                    setStoreProducts={setStoreProducts}
+                    setInventoryModalId={setInventoryModalId}
+                    jobs={jobs}
+                    transactions={transactions}
+                    systemLogs={systemLogs}
+                    logSystemAction={logSystemAction}
                   />
                 </AuthGuard>
               )}
@@ -955,6 +1349,8 @@ export default function App() {
             setStoreModalJobId={setStoreModalJobId}
             addTimelineEvent={addTimelineEvent}
             hasPermission={hasPermission}
+            currentUser={currentUser}
+            currentShift={currentShift}
           />
         )}
         
@@ -979,7 +1375,95 @@ export default function App() {
             showToast={showToast} 
             onClose={() => setCheckoutModalJobId(null)} 
             hasPermission={hasPermission}
+            clients={clients}
+            systemSettings={systemSettings}
+            currentUser={currentUser}
+            logSystemAction={logSystemAction}
           />
+        )}
+
+        {cancelJobId && (
+          <CancelJobModal 
+            key="cancel-job-modal"
+            jobId={cancelJobId}
+            jobs={jobs}
+            onClose={() => setCancelJobId(null)}
+            onConfirm={handleConfirmCancelJob}
+          />
+        )}
+
+        {confirmWashJobId && (
+          <div 
+            key="confirm-wash-overlay"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => { setConfirmWashJobId(null); setSelectedOperatorId(''); }}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="panel-glass p-8 rounded-2xl max-w-md w-full border border-sw-yellow/40 shadow-[0_0_50px_rgba(255,232,31,0.15)]"
+            >
+              <div className="flex items-center gap-3 mb-6 text-sw-yellow">
+                <Wrench size={32} className="animate-bounce" />
+                <h3 className="sw-title-font font-bold uppercase tracking-widest text-2xl">Iniciar Lavado</h3>
+              </div>
+              
+              <p className="text-gray-300 text-[14px] mb-8 font-bold uppercase tracking-widest bg-sw-yellow/5 p-4 rounded-xl border border-sw-yellow/20">
+                Seleccione el operador responsable para la patente: <span className="text-sw-yellow text-xl block mt-1 font-mono">{jobs.find(j => j.id === confirmWashJobId)?.plate}</span>
+              </p>
+
+              <div className="space-y-4 mb-8">
+                <label className="text-[14px] font-bold text-gray-500 uppercase tracking-widest block">Asignar Operador</label>
+                <div className="grid grid-cols-1 gap-3">
+                  {(users.filter((u: any) => u.role === 'Operario').length > 0 ? users.filter((u: any) => u.role === 'Operario') : [
+                    { id: 'op1', name: 'Operador 1' },
+                    { id: 'op2', name: 'Operador 2' }
+                  ]).map((op: any) => (
+                    <button
+                      key={op.id}
+                      onClick={() => setSelectedOperatorId(op.id)}
+                      className={`py-4 px-6 rounded-xl border-2 transition-all flex justify-between items-center group ${
+                        selectedOperatorId === op.id 
+                          ? 'bg-sw-yellow/20 border-sw-yellow text-sw-yellow shadow-[0_0_20px_rgba(255,232,31,0.2)]' 
+                          : 'bg-black/40 border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Users size={20} className={selectedOperatorId === op.id ? 'text-sw-yellow' : 'text-gray-600'} />
+                        <span className="font-bold uppercase tracking-widest">{op.name}</span>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        selectedOperatorId === op.id ? 'border-sw-yellow bg-sw-yellow text-black' : 'border-gray-800'
+                      }`}>
+                        {selectedOperatorId === op.id && <CheckCircle2 size={14} />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => { setConfirmWashJobId(null); setSelectedOperatorId(''); }}
+                  className="flex-1 py-4 rounded-xl border border-gray-700 text-gray-400 hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-[14px]"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={confirmWashStatus}
+                  disabled={!selectedOperatorId}
+                  className={`flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-[14px] transition-all shadow-[0_0_20px_rgba(46,204,113,0.2)] ${
+                    selectedOperatorId 
+                    ? 'bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black cursor-pointer' 
+                    : 'bg-gray-800 border border-gray-700 text-gray-600 cursor-not-allowed opacity-50'
+                  }`}
+                >
+                  Iniciar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
 
         {confirmReadyJobId && (
@@ -1004,19 +1488,56 @@ export default function App() {
               <div className="flex gap-3">
                 <button 
                   onClick={() => setConfirmReadyJobId(null)}
-                  className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-xs"
+                  className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-[14px]"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={confirmReadyStatus}
-                  className="flex-1 py-2 rounded-lg bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black transition-all font-bold uppercase tracking-widest text-xs"
+                  className="flex-1 py-2 rounded-lg bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black transition-all font-bold uppercase tracking-widest text-[14px]"
                 >
                   Aprobar
                 </button>
               </div>
             </motion.div>
           </div>
+        )}
+
+        {longShiftNotify && (
+          <motion.div 
+            key="long-shift-notification"
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-24 left-1/2 z-[250] px-6 py-5 rounded-2xl border-2 shadow-[0_20px_60px_rgba(255,232,31,0.2)] flex items-center gap-8 backdrop-blur-2xl bg-black/95 border-sw-yellow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-sw-yellow/20 rounded-full flex items-center justify-center border border-sw-yellow/50">
+                <Clock size={24} className="text-sw-yellow animate-pulse" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-black uppercase tracking-[0.15em] text-sw-yellow text-sm">Alerta de Jornada</span>
+                <span className="text-white text-[14px] font-bold opacity-80 uppercase tracking-widest">No olvide cerrar su turno al terminar su jornada laboral.</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setLongShiftNotify(false)}
+                className="px-4 py-2 rounded-xl border border-gray-700 text-gray-400 hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-[14px]"
+              >
+                Ignorar
+              </button>
+              <button 
+                onClick={() => {
+                  setLongShiftNotify(false);
+                  setShowCloseShiftModal(true);
+                }}
+                className="px-6 py-2 rounded-xl bg-sw-red text-white transition-all font-black uppercase tracking-widest text-[14px] shadow-[0_0_20px_rgba(231,76,60,0.3)]"
+              >
+                Cerrar Turno
+              </button>
+            </div>
+          </motion.div>
         )}
 
         {smsNotificationJobId && (
@@ -1030,9 +1551,9 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2 text-sw-blue mb-1">
                 <Bell size={16} className="animate-pulse" />
-                <span className="font-bold uppercase tracking-widest text-xs">Enviando SMS Automático</span>
+                <span className="font-bold uppercase tracking-widest text-[14px]">Enviando SMS Automático</span>
               </div>
-              <div className="text-gray-400 text-[10px] uppercase tracking-widest">
+              <div className="text-gray-400 text-[14px] uppercase tracking-widest">
                 Enviando en {smsCountdown} segundos...
               </div>
             </div>
@@ -1041,7 +1562,7 @@ export default function App() {
                 setSmsNotificationJobId(null);
                 showToast('Envío de SMS cancelado', 'info');
               }}
-              className="px-4 py-2 rounded-lg bg-sw-red/20 border border-sw-red text-sw-red hover:bg-sw-red hover:text-white transition-all font-bold uppercase tracking-widest text-xs"
+              className="px-4 py-2 rounded-lg bg-sw-red/20 border border-sw-red text-sw-red hover:bg-sw-red hover:text-white transition-all font-bold uppercase tracking-widest text-[14px]"
             >
               Cancelar Envío
             </button>
@@ -1057,44 +1578,6 @@ export default function App() {
             onClose={() => setShowOpenShiftModal(false)} 
             handleLogout={handleLogout} 
           />
-        )}
-
-        {showShiftReminder && (
-          <div 
-            key="shift-reminder-overlay"
-            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="panel-glass p-8 rounded-2xl max-w-md w-full border border-sw-red/30 shadow-[0_0_50px_rgba(231,76,60,0.15)] text-center"
-            >
-              <div className="w-16 h-16 bg-sw-red/20 rounded-full flex items-center justify-center mx-auto mb-6 text-sw-red">
-                <AlertCircle size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-white sw-title-font tracking-widest uppercase mb-2">TURNO NO INICIADO</h3>
-              <p className="text-gray-400 text-sm mb-8">
-                No has iniciado un turno de trabajo. Puedes visualizar la información, pero no podrás registrar nuevos vehículos o ventas.
-              </p>
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={() => {
-                    setShowShiftReminder(false);
-                    setShowOpenShiftModal(true);
-                  }}
-                  className="w-full py-3 rounded-xl bg-sw-green text-black font-bold uppercase tracking-widest text-sm hover:scale-105 transition-all"
-                >
-                  Iniciar Turno Ahora
-                </button>
-                <button 
-                  onClick={() => setShowShiftReminder(false)}
-                  className="w-full py-3 rounded-xl border border-gray-800 text-gray-500 hover:text-white hover:bg-white/5 transition-all font-bold uppercase tracking-widest text-xs"
-                >
-                  5 Minutos Más
-                </button>
-              </div>
-            </motion.div>
-          </div>
         )}
         
         {showCashMovementModal && currentShift && (
@@ -1117,6 +1600,9 @@ export default function App() {
             jobs={jobs}
             onClose={() => setClientModalId(null)} 
             setDetailModalJobId={setDetailModalJobId}
+            systemSettings={systemSettings}
+            categories={categories}
+            showToast={showToast}
           />
         )}
 
@@ -1129,6 +1615,7 @@ export default function App() {
             onClose={() => setServiceModalId(null)}
             showToast={showToast}
             hasPermission={hasPermission}
+            isAdmin={currentUser?.role === 'Admin' || currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'starparkiquique@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com'}
           />
         )}
 
@@ -1188,17 +1675,6 @@ export default function App() {
 
 
 
-        {categoryModalId && (
-          <CategoryModal 
-            key="category-modal"
-            categoryId={categoryModalId === 'new' ? null : categoryModalId}
-            categories={categories}
-            onClose={() => setCategoryModalId(null)}
-            showToast={showToast}
-            hasPermission={hasPermission}
-          />
-        )}
-
         {inventoryModalId && (
           <InventoryItemModal 
             key="inventory-item-modal"
@@ -1207,6 +1683,8 @@ export default function App() {
             onClose={() => setInventoryModalId(null)}
             showToast={showToast}
             hasPermission={hasPermission}
+            transactions={transactions}
+            jobs={jobs}
           />
         )}
 
