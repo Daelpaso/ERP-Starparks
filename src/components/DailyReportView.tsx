@@ -14,13 +14,14 @@ export const DailyReportView = ({ jobs, clients, transactions, shifts, onShowZRe
   const [showExportModal, setShowExportModal] = useState(false);
   const tabs = [
     { id: 'ventas', label: 'Ventas y Finanzas', permission: 'view_reports', color: 'sw-blue' },
+    { id: 'movimientos', label: 'Mov. de Caja Manual', permission: 'view_reports', color: 'sw-red' },
     { id: 'operativo', label: 'Historial Operativo', permission: 'view_reports', color: 'sw-yellow' },
     { id: 'turnos', label: 'Historial de Turnos', permission: 'view_reports', color: 'sw-yellow' },
     { id: 'tienda', label: 'Reporte de Tienda express', permission: 'view_reports', color: 'sw-green' },
     { id: 'comisiones', label: 'Reporte de Comisiones', permission: 'view_reports', color: 'sw-blue' }
   ].filter(t => !t.permission || hasPermission(t.permission));
 
-  const [activeSubTab, setActiveSubTab] = useState<'ventas' | 'operativo' | 'turnos' | 'tienda' | 'comisiones' | string>(initialSubTab || (tabs.length > 0 ? tabs[0].id : 'ventas'));
+  const [activeSubTab, setActiveSubTab] = useState<'ventas' | 'movimientos' | 'operativo' | 'turnos' | 'tienda' | 'comisiones' | string>(initialSubTab || (tabs.length > 0 ? tabs[0].id : 'ventas'));
   const [selectedWorkerForCommission, setSelectedWorkerForCommission] = useState<string>('all');
   const [tiendaFilters, setTiendaFilters] = useState({ product: '', startTime: '', endTime: '', operator: 'all' });
   const [operativoFilters, setOperativoFilters] = useState({ plate: '', status: 'all', worker: 'all' });
@@ -72,7 +73,9 @@ export const DailyReportView = ({ jobs, clients, transactions, shifts, onShowZRe
     }, {});
 
     const dayTxs = transactions.filter((t: any) => t.timestamp >= start.getTime() && t.timestamp <= end.getTime());
-    const cashFlow = dayTxs.reduce((acc: any, t: any) => {
+    const manualTxs = dayTxs.filter((t: any) => !t.jobId);
+    
+    const cashFlow = manualTxs.reduce((acc: any, t: any) => {
       if (t.type === 'income') acc.income += t.amount;
       else acc.expense += t.amount;
       return acc;
@@ -386,10 +389,14 @@ export const DailyReportView = ({ jobs, clients, transactions, shifts, onShowZRe
             </div>
 
             <div className="panel-glass p-6 rounded-2xl border border-gray-800">
-              <h3 className="text-[14px] font-bold text-white uppercase tracking-widest mb-4 border-b border-gray-800 pb-2">Flujo de Caja (Movimientos)</h3>
+              <h3 className="text-[14px] font-bold text-white uppercase tracking-widest mb-4 border-b border-gray-800 pb-2">Flujo de Caja Físico (Efectivo)</h3>
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-400">Ingresos Registrados</span>
+                  <span className="text-sm text-gray-400">Ventas en Efectivo</span>
+                  <span className="font-mono font-bold text-white">${reportData.revenue.efectivo.toLocaleString('es-CL')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-400">Ingresos Manuales</span>
                   <span className="font-mono font-bold text-sw-green">+${reportData.cashFlow.income.toLocaleString('es-CL')}</span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -397,9 +404,9 @@ export const DailyReportView = ({ jobs, clients, transactions, shifts, onShowZRe
                   <span className="font-mono font-bold text-sw-red">-${reportData.cashFlow.expense.toLocaleString('es-CL')}</span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-gray-800">
-                  <span className="text-sm font-bold text-white">Balance de Caja</span>
-                  <span className={`font-mono font-bold ${reportData.cashFlow.income - reportData.cashFlow.expense >= 0 ? 'text-sw-green' : 'text-sw-red'}`}>
-                    ${(reportData.cashFlow.income - reportData.cashFlow.expense).toLocaleString('es-CL')}
+                  <span className="text-sm font-bold text-white">Efectivo Total Proyectado</span>
+                  <span className={`font-mono font-bold ${reportData.revenue.efectivo + reportData.cashFlow.income - reportData.cashFlow.expense >= 0 ? 'text-sw-green' : 'text-sw-red'}`}>
+                    ${(reportData.revenue.efectivo + reportData.cashFlow.income - reportData.cashFlow.expense).toLocaleString('es-CL')}
                   </span>
                 </div>
               </div>
@@ -475,6 +482,97 @@ export const DailyReportView = ({ jobs, clients, transactions, shifts, onShowZRe
             </div>
           </div>
         </>
+      ) : activeSubTab === 'movimientos' ? (
+        <div className="space-y-6">
+          <div className="panel-glass p-6 rounded-2xl border-t-4 border-sw-red flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                <DollarSign className="text-sw-red" size={24} /> Historial de Movimientos Manuales
+              </h2>
+              <p className="text-gray-400 text-sm mt-2 uppercase font-bold tracking-widest">
+                Ingresos y Egresos de caja registrados manualmente.
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-black/40 p-1 rounded-xl border border-gray-800">
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                  <input 
+                    type="date" 
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="bg-transparent pl-9 pr-3 py-2 text-white font-mono text-[14px] outline-none focus:text-sw-blue transition-all w-36"
+                  />
+                </div>
+                <span className="text-gray-600 font-bold">→</span>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                  <input 
+                    type="date" 
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="bg-transparent pl-9 pr-3 py-2 text-white font-mono text-[14px] outline-none focus:text-sw-blue transition-all w-36"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="panel-glass p-6 rounded-2xl border border-sw-green/20">
+                 <div className="text-[14px] uppercase font-bold text-sw-green tracking-widest text-center">Total Ingresos</div>
+                 <div className="text-3xl font-black font-mono text-center text-white mt-2">
+                   +${transactions.filter((t: any) => !t.jobId && t.type === 'income' && t.timestamp >= new Date(dateRange.start.split('-')[0], Number(dateRange.start.split('-')[1])-1, Number(dateRange.start.split('-')[2])).getTime() && t.timestamp <= new Date(dateRange.end.split('-')[0], Number(dateRange.end.split('-')[1])-1, Number(dateRange.end.split('-')[2]), 23, 59, 59, 999).getTime()).reduce((sum, t) => sum + t.amount, 0).toLocaleString('es-CL')}
+                 </div>
+               </div>
+               <div className="panel-glass p-6 rounded-2xl border border-sw-red/20">
+                 <div className="text-[14px] uppercase font-bold text-sw-red tracking-widest text-center">Total Egresos/Retiros</div>
+                 <div className="text-3xl font-black font-mono text-center text-white mt-2">
+                   -${transactions.filter((t: any) => !t.jobId && t.type === 'expense' && t.timestamp >= new Date(dateRange.start.split('-')[0], Number(dateRange.start.split('-')[1])-1, Number(dateRange.start.split('-')[2])).getTime() && t.timestamp <= new Date(dateRange.end.split('-')[0], Number(dateRange.end.split('-')[1])-1, Number(dateRange.end.split('-')[2]), 23, 59, 59, 999).getTime()).reduce((sum, t) => sum + t.amount, 0).toLocaleString('es-CL')}
+                 </div>
+               </div>
+          </div>
+
+          <div className="panel-glass rounded-2xl border border-gray-800 overflow-hidden">
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse min-w-max">
+                <thead className="bg-black/40 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800">
+                  <tr>
+                    <th className="p-4">Fecha/Hora</th>
+                    <th className="p-4">Tipo</th>
+                    <th className="p-4 text-right">Monto</th>
+                    <th className="p-4">Motivo</th>
+                    <th className="p-4">Usuario</th>
+                    <th className="p-4">ID Turno</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/50">
+                  {transactions.filter((t: any) => !t.jobId && t.timestamp >= new Date(dateRange.start.split('-')[0], Number(dateRange.start.split('-')[1])-1, Number(dateRange.start.split('-')[2])).getTime() && t.timestamp <= new Date(dateRange.end.split('-')[0], Number(dateRange.end.split('-')[1])-1, Number(dateRange.end.split('-')[2]), 23, 59, 59, 999).getTime()).sort((a: any, b: any) => b.timestamp - a.timestamp).map((t: any) => (
+                    <tr key={t.id} className="hover:bg-white/5 transition-colors">
+                      <td className="p-4 font-mono text-xs text-gray-400">{new Date(t.timestamp).toLocaleString('es-CL')}</td>
+                      <td className="p-4 text-xs font-bold uppercase tracking-widest" style={{ color: t.type === 'income' ? '#2ecc71' : '#e74c3c' }}>
+                        {t.type === 'income' ? 'INGRESO' : 'EGRESO'}
+                      </td>
+                      <td className="p-4 text-xs font-mono font-bold text-right" style={{ color: t.type === 'income' ? '#2ecc71' : '#e74c3c' }}>
+                        ${t.amount.toLocaleString('es-CL')}
+                      </td>
+                      <td className="p-4 text-xs text-gray-300 max-w-sm truncate">{t.reason}</td>
+                      <td className="p-4 text-xs text-gray-500">{t.userName || t.userId}</td>
+                      <td className="p-4 font-mono text-xs text-gray-600">{t.shiftId}</td>
+                    </tr>
+                  ))}
+                  {transactions.filter((t: any) => !t.jobId && t.timestamp >= new Date(dateRange.start.split('-')[0], Number(dateRange.start.split('-')[1])-1, Number(dateRange.start.split('-')[2])).getTime() && t.timestamp <= new Date(dateRange.end.split('-')[0], Number(dateRange.end.split('-')[1])-1, Number(dateRange.end.split('-')[2]), 23, 59, 59, 999).getTime()).length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-500 text-sm italic">
+                        No hay movimientos manuales registrados en este período.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       ) : activeSubTab === 'operativo' ? (
         <div className="space-y-6">
           <div className="panel-glass p-6 rounded-2xl border-t-4 border-sw-yellow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

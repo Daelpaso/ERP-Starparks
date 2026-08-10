@@ -3,7 +3,7 @@ import { Car, ShoppingCart, CheckCircle2, FileText, Clock, Phone, MessageSquare,
 import { STATUS_FLOW } from '../lib/constants';
 import { calculateParkingTimeAndFee } from '../lib/utils';
 
-export const WorkshopView = ({ jobs, clients, advanceJobStatus, setStoreModalJobId, setDetailModalJobId, addTimelineEvent, onCancelJob, isAdmin }: any) => {
+export const WorkshopView = ({ jobs, clients, advanceJobStatus, setStoreModalJobId, setDetailModalJobId, addTimelineEvent, onCancelJob, isAdmin, isShiftOwner }: any) => {
   const columns = STATUS_FLOW.slice(0, 3); // Cola, Lavando, Listo
   const [now, setNow] = useState(Date.now());
 
@@ -121,79 +121,90 @@ export const WorkshopView = ({ jobs, clients, advanceJobStatus, setStoreModalJob
                     )}
                   </div>
 
-                  <div className={`grid ${isListo ? 'grid-cols-3' : (status === 'Cola' && isAdmin ? 'grid-cols-4' : 'grid-cols-3')} gap-2 pt-3 border-t border-gray-800`}>
-                    {isListo ? (
-                      <>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addTimelineEvent(job.id, 'Llamada al cliente');
-                            window.location.href = `tel:${job.clientPhone}`;
-                          }}
-                          className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-sw-blue transition-all"
-                          title="Llamar"
-                        >
-                          <Phone size={18} />
-                          <span className="text-[14px] uppercase font-bold">Llamar</span>
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addTimelineEvent(job.id, 'Mensaje enviado al cliente');
-                            window.location.href = `sms:${job.clientPhone}`;
-                          }}
-                          className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-sw-green transition-all"
-                          title="Mensaje"
-                        >
-                          <MessageSquare size={18} />
-                          <span className="text-[14px] uppercase font-bold">Mensaje</span>
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); advanceJobStatus(job.id, job.status); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded hover:bg-sw-green/20 text-sw-green transition-all"
-                          title="Siguiente"
-                        >
-                          <CheckCircle2 size={18} />
-                          <span className="text-[14px] uppercase font-bold">Aprobar</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setDetailModalJobId(job.id); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-white transition-all"
-                          title="Ver Ficha"
-                        >
-                          <FileText size={18} />
-                          <span className="text-[14px] uppercase font-bold text-center">Ficha</span>
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setStoreModalJobId(job.id); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-sw-yellow transition-all"
-                          title="Tienda"
-                        >
-                          <ShoppingCart size={18} />
-                          <span className="text-[14px] uppercase font-bold text-center">Tienda</span>
-                        </button>
-                        {status === 'Cola' && isAdmin && (
+                  <div className={`grid ${isShiftOwner ? (isListo ? 'grid-cols-3' : (status === 'Cola' && isAdmin ? 'grid-cols-4' : 'grid-cols-3')) : 'grid-cols-1'} gap-2 pt-3 border-t border-gray-800`}>
+                    {isShiftOwner ? (
+                      isListo ? (
+                        <>
                           <button 
-                            onClick={(e) => { e.stopPropagation(); onCancelJob(job.id); }}
-                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-sw-red/20 text-sw-red transition-all"
-                            title="Retirar Vehículo"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addTimelineEvent(job.id, 'Llamada al cliente');
+                              window.location.href = `tel:${job.clientPhone}`;
+                            }}
+                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-sw-blue transition-all"
+                            title="Llamar"
                           >
-                            <XCircle size={18} />
-                            <span className="text-[14px] uppercase font-bold text-center">Retirar</span>
+                            <Phone size={18} />
+                            <span className="text-[14px] uppercase font-bold">Llamar</span>
                           </button>
-                        )}
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); advanceJobStatus(job.id, job.status); }}
-                          className="flex flex-col items-center gap-1 p-2 rounded hover:bg-sw-green/20 text-sw-green transition-all"
-                          title="Siguiente"
-                        >
-                          <CheckCircle2 size={18} />
-                          <span className="text-[14px] uppercase font-bold text-center">Aprobar</span>
-                        </button>
-                      </>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addTimelineEvent(job.id, 'Mensaje enviado al cliente');
+                              window.location.href = `sms:${job.clientPhone}`;
+                            }}
+                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-sw-green transition-all"
+                            title="Mensaje"
+                          >
+                            <MessageSquare size={18} />
+                            <span className="text-[14px] uppercase font-bold">Mensaje</span>
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); advanceJobStatus(job.id, job.status); }}
+                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-sw-green/20 text-sw-green transition-all"
+                            title="Siguiente"
+                          >
+                            <CheckCircle2 size={18} />
+                            <span className="text-[14px] uppercase font-bold">Aprobar</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setDetailModalJobId(job.id); }}
+                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-white transition-all"
+                            title="Ver Ficha"
+                          >
+                            <FileText size={18} />
+                            <span className="text-[14px] uppercase font-bold text-center">Ficha</span>
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setStoreModalJobId(job.id); }}
+                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-sw-yellow transition-all"
+                            title="Tienda"
+                          >
+                            <ShoppingCart size={18} />
+                            <span className="text-[14px] uppercase font-bold text-center">Tienda</span>
+                          </button>
+                          {status === 'Cola' && isAdmin && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); onCancelJob(job.id); }}
+                              className="flex flex-col items-center gap-1 p-2 rounded hover:bg-sw-red/20 text-sw-red transition-all"
+                              title="Retirar Vehículo"
+                            >
+                              <XCircle size={18} />
+                              <span className="text-[14px] uppercase font-bold text-center">Retirar</span>
+                            </button>
+                          )}
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); advanceJobStatus(job.id, job.status); }}
+                            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-sw-green/20 text-sw-green transition-all"
+                            title="Siguiente"
+                          >
+                            <CheckCircle2 size={18} />
+                            <span className="text-[14px] uppercase font-bold text-center">Aprobar</span>
+                          </button>
+                        </>
+                      )
+                    ) : (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setDetailModalJobId(job.id); }}
+                        className="flex items-center justify-center gap-2 p-2 rounded hover:bg-white/5 text-gray-400 hover:text-white transition-all w-full"
+                        title="Ver Ficha"
+                      >
+                        <FileText size={18} />
+                        <span className="text-[14px] uppercase font-bold">Ver Detalles</span>
+                      </button>
                     )}
                   </div>
                 </div>

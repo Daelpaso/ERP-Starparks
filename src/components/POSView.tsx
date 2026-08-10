@@ -31,6 +31,7 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
   const [discountPin, setDiscountPin] = useState('');
   const [addonCart, setAddonCart] = useState<any[]>([]);
   const [pendingSale, setPendingSale] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [printTicketJob, setPrintTicketJob] = useState<any>(null);
 
   // Express state
@@ -187,6 +188,17 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
     if (!selectedCat) { showToast('Seleccione un tipo de vehículo', 'error'); return; }
     if (!selectedService) { showToast('Seleccione un servicio', 'error'); return; }
     if (!validarPatenteChilena(plate)) { showToast('Patente inválida', 'error'); return; }
+
+    // Check for existing active vehicle with same plate in the taller
+    const cleanPlateInput = plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const activeDuplicate = jobs.find((j: any) => 
+      j.plate && j.plate.toUpperCase().replace(/[^A-Z0-9]/g, '') === cleanPlateInput && j.status !== 'Entregado' && j.status !== 'Anulado'
+    );
+    if (activeDuplicate) {
+      showToast(`El vehículo con patente ${plate.toUpperCase()} ya está activo en el Taller (${activeDuplicate.status})`, 'error');
+      return;
+    }
+
     if (clientName.trim() || (clientPhone.trim() && clientPhone !== '+56')) {
       if (!clientName.trim()) { showToast('El nombre es obligatorio', 'error'); return; }
       if (!clientPhone.trim() || clientPhone === '+56') { showToast('El teléfono es obligatorio', 'error'); return; }
@@ -212,6 +224,20 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
 
   const confirmSale = async () => {
     if (!pendingSale) return;
+    if (isSubmitting) return;
+
+    // Double check just before saving in case someone added it simultaneously
+    const cleanPlateInput = pendingSale.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const activeDuplicate = jobs.find((j: any) => 
+      j.plate && j.plate.toUpperCase().replace(/[^A-Z0-9]/g, '') === cleanPlateInput && j.status !== 'Entregado' && j.status !== 'Anulado'
+    );
+    if (activeDuplicate) {
+      showToast(`El vehículo con patente ${pendingSale.plate} ya está activo en el taller`, 'error');
+      setPendingSale(null);
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       // 1. Create or Update Client Info
       if (pendingSale.isNewClient) {
@@ -285,6 +311,8 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
       resetForm();
     } catch {
       showToast('Error al guardar', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -292,6 +320,9 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
     if (!currentShift) { showToast('Debe iniciar un turno primero', 'error'); return; }
     if (!hasPermission('write_pos')) { showToast('Sin permisos de venta', 'error'); return; }
     if (expressCart.length === 0) { showToast('Carrito vacío', 'error'); return; }
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
     const now = Date.now();
     const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
     try {
@@ -329,6 +360,8 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
     } catch (e) {
       console.error(e);
       showToast('Error al preparar venta express', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -407,7 +440,20 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
               >
                 Cancelar
               </button>
-              <button onClick={confirmSale} className="flex-1 btn-jedi py-4 rounded-xl font-bold uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(46,204,113,0.3)]">Confirmar Ingreso</button>
+              <button 
+                onClick={confirmSale} 
+                disabled={isSubmitting}
+                className="flex-1 btn-jedi py-4 rounded-xl font-bold uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(46,204,113,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                    Guardando...
+                  </>
+                ) : (
+                  "Confirmar Ingreso"
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -1018,7 +1064,7 @@ export const POSView = ({ jobs, setJobs, clients, setClients, services, storePro
                   <button 
                     onClick={handlePreSubmit}
                     className={`w-full py-5 rounded-2xl font-black uppercase text-xl tracking-[0.2em] flex justify-center items-center gap-4 transition-all active:scale-95 shadow-[0_0_30px_rgba(0,168,255,0.2)] ${selectedService ? 'btn-jedi' : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'}`}
-                    disabled={!selectedService}
+                    disabled={!selectedService || isSubmitting}
                   >
                     <Zap size={24} fill="currentColor" /> INGRESAR
                   </button>

@@ -15,6 +15,9 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
   if (!job) return null;
 
   const { extraFee, extraMins, totalElapsedSinceReady } = calculateParkingTimeAndFee(job);
+  const isShiftOwner = currentShift?.openedBy === (currentUser?.email || currentUser?.id);
+  const [showSupervisorPin, setShowSupervisorPin] = useState(false);
+  const [supervisorPin, setSupervisorPin] = useState('');
 
   const handleSaveNote = async () => {
     if (!hasPermission('write_workshop')) return;
@@ -261,24 +264,68 @@ export const JobDetailModal = ({ jobId, jobs, onClose, advanceJobStatus, setStor
           </div>
         </div>
 
-        <div className="p-6 border-t border-gray-800 bg-black/50 flex gap-4">
-          <button 
-            onClick={() => { onClose(); setStoreModalJobId(job.id); }}
-            className="flex-1 py-3 rounded-xl border border-sw-yellow/50 text-sw-yellow hover:bg-sw-yellow/10 transition-all font-bold uppercase tracking-widest text-[14px] flex items-center justify-center gap-2"
-          >
-            <ShoppingCart size={16} /> Tienda
-          </button>
-          {job.status !== 'Entregado' && (
-            <button 
-              onClick={() => { 
-                if (!hasPermission('write_workshop')) return;
-                onClose(); 
-                advanceJobStatus(job.id, job.status); 
-              }}
-              className="flex-1 py-3 rounded-xl bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black transition-all font-bold uppercase tracking-widest text-[14px] flex items-center justify-center gap-2"
-            >
-              <CheckCircle2 size={16} /> Siguiente Estado
-            </button>
+        <div className="p-6 border-t border-gray-800 bg-black/50 flex flex-col gap-4">
+          {showSupervisorPin ? (
+            <div className="w-full flex items-center gap-3">
+              <input 
+                type="password" 
+                maxLength={4}
+                autoFocus
+                placeholder="PIN 1124"
+                value={supervisorPin}
+                onChange={e => setSupervisorPin(e.target.value)}
+                className="flex-1 bg-black/50 border border-sw-yellow rounded-xl px-4 py-3 text-white text-center tracking-[0.5em] font-mono focus:outline-none focus:ring-1 focus:ring-sw-yellow"
+              />
+              <button 
+                onClick={() => {
+                  if (supervisorPin === '1124') {
+                    onClose();
+                    advanceJobStatus(job.id, job.status);
+                  } else {
+                    alert('PIN Incorrecto');
+                    setSupervisorPin('');
+                  }
+                }}
+                className="py-3 px-6 rounded-xl bg-sw-yellow text-black hover:bg-white transition-all font-bold uppercase tracking-widest text-[14px]"
+              >
+                Aprobar
+              </button>
+              <button 
+                onClick={() => { setShowSupervisorPin(false); setSupervisorPin(''); }}
+                className="p-3 rounded-xl border border-gray-700 text-gray-400 hover:text-white transition-all"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-4 w-full">
+              <button 
+                onClick={() => { onClose(); setStoreModalJobId(job.id); }}
+                className="flex-1 py-3 rounded-xl border border-sw-yellow/50 text-sw-yellow hover:bg-sw-yellow/10 transition-all font-bold uppercase tracking-widest text-[14px] flex items-center justify-center gap-2"
+              >
+                <ShoppingCart size={16} /> Tienda
+              </button>
+              {job.status !== 'Entregado' && (
+                <button 
+                  onClick={() => { 
+                    if (!isShiftOwner) {
+                       setShowSupervisorPin(true);
+                       return;
+                    }
+                    if (!hasPermission('write_workshop')) return;
+                    onClose(); 
+                    advanceJobStatus(job.id, job.status); 
+                  }}
+                  className={`flex-1 py-3 rounded-xl transition-all font-bold uppercase tracking-widest text-[14px] flex items-center justify-center gap-2 ${
+                    !isShiftOwner 
+                      ? 'bg-transparent border border-gray-600 text-gray-500 hover:border-sw-yellow hover:text-sw-yellow' 
+                      : 'bg-sw-green/20 border border-sw-green text-sw-green hover:bg-sw-green hover:text-black'
+                  }`}
+                >
+                  <CheckCircle2 size={16} /> {!isShiftOwner ? 'Forzar Estado' : 'Siguiente Estado'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

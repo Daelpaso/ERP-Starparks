@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   X, FileDown, FileSpreadsheet, Clock, ShieldAlert, 
-  UserSquare2, Activity
+  UserSquare2, Activity, DollarSign
 } from 'lucide-react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -59,8 +59,9 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
       return acc;
     }, { totalSales: 0, cash: 0, cards: 0, transfers: 0, credits: 0 });
 
-    const txIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    const txExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const manualTxs = transactions.filter(t => !t.jobId);
+    const txIncome = manualTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const txExpense = manualTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
 
     const systemCash = (shift.initialCash || 0) + breakdown.cash + txIncome - txExpense;
     const cashVariance = (shift.declaredCash || 0) - systemCash;
@@ -151,6 +152,22 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
       : metrics.cashVariance > 0 
         ? 'Explicación: Existe un SOBRANTE. Hay más dinero en físico que lo registrado en el sistema.' 
         : 'Explicación: Existe un FALTANTE. Falta dinero físico respecto a lo registrado por el sistema.', 14, currentY + 10);
+
+    const manualTxsArray = transactions.filter(t => !t.jobId);
+    if (manualTxsArray.length > 0) {
+      autoTable(doc, {
+        startY: currentY + 15,
+        head: [['Mov. Caja', 'Fecha / Hora', 'Monto', 'Motivo']],
+        body: manualTxsArray.map(t => [
+          t.type === 'income' ? 'INGRESO' : 'EGRESO',
+          new Date(t.timestamp).toLocaleString('es-CL'),
+          `$${t.amount.toLocaleString('es-CL')}`,
+          t.reason || 'Sin motivo'
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [46, 204, 113] }
+      });
+    }
 
     doc.save(`Auditoria_Reporte_Z_${shift.id}.pdf`);
   };
@@ -295,6 +312,33 @@ export const HistoricalZReportModal = ({ shift, onClose, showToast }: any) => {
                       </tr>
                     </tbody>
                   </table>
+                </div>
+
+                <div className="pt-4 space-y-4">
+                  <h3 className="text-gray-400 font-bold tracking-widest uppercase text-[14px] mb-4 border-b border-gray-800 pb-2 flex items-center gap-2">
+                    <DollarSign size={14}/> Movimientos de Caja (Manuales)
+                  </h3>
+                  {transactions.filter(t => !t.jobId).length === 0 ? (
+                    <div className="text-center p-4 bg-black/30 border border-gray-800/80 rounded-xl text-gray-600 text-[14px] uppercase font-bold tracking-widest border-dashed">
+                      Sin Movimientos Manuales Registrados
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                       {transactions.filter(t => !t.jobId).map(t => (
+                         <div key={t.id} className={`p-3 border rounded-xl flex flex-col gap-2 transition-transform hover:scale-[1.01] ${t.type === 'income' ? 'bg-sw-green/5 border-sw-green/20' : 'bg-sw-red/5 border-sw-red/20'}`}>
+                           <div className="flex justify-between items-center text-[14px] font-mono">
+                             <span className={`font-bold ${t.type === 'income' ? 'text-sw-green' : 'text-sw-red'}`}>
+                               {t.type === 'income' ? 'INGRESO' : 'EGRESO'}: ${t.amount.toLocaleString('es-CL')}
+                             </span>
+                             <span className="text-gray-500">{new Date(t.timestamp).toLocaleString('es-CL')}</span>
+                           </div>
+                           <div className="text-[14px] text-gray-400 bg-black/30 p-2 rounded italic">
+                             Motivo: {t.reason || 'No especificado'}
+                           </div>
+                         </div>
+                       ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 space-y-4">

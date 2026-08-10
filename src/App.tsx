@@ -3,7 +3,7 @@ import {
   Menu, X, LayoutDashboard, Wrench, History, Store, Users, Settings, 
   LogOut, Moon, Sun, Zap, Eye, EyeOff, AlertCircle, CheckCircle2, Info, Bell,
   Shield, DollarSign, Package, Clock, ChevronLeft, ChevronRight, Calendar,
-  Accessibility, Type, ZoomIn, ZoomOut, RotateCcw, TrendingUp, Unlock
+  Accessibility, Type, ZoomIn, ZoomOut, RotateCcw, TrendingUp, Unlock, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -250,6 +250,36 @@ export default function App() {
 
   // Current Shift
   const currentShift = useMemo(() => shifts.find(s => s.status === 'open'), [shifts]);
+  const isShiftOwner = useMemo(() => currentShift?.openedBy === (currentUser?.email || currentUser?.id), [currentShift, currentUser]);
+
+  // Presence System
+  useEffect(() => {
+    if (!currentUser || !isAuthReady) return;
+    const interval = setInterval(() => {
+      updateDoc(doc(db, 'users', currentUser.id), {
+        lastActiveAt: Date.now(),
+        viewing: activeTab
+      }).catch(() => {});
+    }, 15000);
+
+    const onUnload = () => {
+      // Use navigator.sendBeacon or a synchronous call if possible, but keep simple for now
+      updateDoc(doc(db, 'users', currentUser.id), {
+        lastActiveAt: 0,
+      }).catch(() => {});
+    };
+    window.addEventListener('beforeunload', onUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, [currentUser, isAuthReady, activeTab]);
+
+  const activeUsers = useMemo(() => {
+    const now = Date.now();
+    return users.filter(u => u.lastActiveAt && (now - u.lastActiveAt) < 45000 && u.id !== currentUser?.id);
+  }, [users, currentUser]);
 
   useEffect(() => {
     if (!currentShift?.openedAt) {
@@ -1061,6 +1091,20 @@ export default function App() {
         </div>
 
         <div className="hidden md:flex items-center gap-8">
+          {activeUsers.length > 0 && (
+            <div className="flex -space-x-3 isolate" title="Usuarios Activos">
+              {activeUsers.map(u => (
+                <div key={u.id} className="w-10 h-10 rounded-full bg-sw-blue/20 border-2 border-black flex items-center justify-center text-sw-blue font-bold text-sm tracking-tighter uppercase relative group">
+                  {u.name.substring(0, 2)}
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-sw-green rounded-full border border-black shadow-[0_0_10px_rgba(46,204,113,1)]"></span>
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-900 border border-gray-700 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                    {u.name} ({u.viewing || 'online'})
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
           <SystemClock />
           
           <div className="flex items-center gap-4 border-l border-gray-800 pl-8">
@@ -1162,24 +1206,42 @@ export default function App() {
 
                 <div className={`space-y-2 border-t border-gray-800 pt-4 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
                   {currentShift ? (
-                    <>
-                      <button 
-                        onClick={() => setShowCashMovementModal(true)}
-                        title="Movimiento de Caja"
-                        className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-blue/10 border border-sw-blue/30 text-sw-blue text-sm font-bold uppercase tracking-widest hover:bg-sw-blue hover:text-black transition-all flex items-center gap-2`}
-                      >
-                        <DollarSign size={16} className="shrink-0" />
-                        {!isSidebarCollapsed && "Mov. de Caja"}
-                      </button>
-                      <button 
-                        onClick={() => setShowCloseShiftModal(true)}
-                        title="Cerrar Turno"
-                        className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-red/10 border border-sw-red/30 text-sw-red text-sm font-bold uppercase tracking-widest hover:bg-sw-red hover:text-white transition-all flex items-center gap-2`}
-                      >
-                        <LogOut size={16} className="shrink-0" />
-                        {!isSidebarCollapsed && "Cerrar Turno"}
-                      </button>
-                    </>
+                    isShiftOwner ? (
+                      <>
+                        <button 
+                          onClick={() => setShowCashMovementModal(true)}
+                          title="Movimiento de Caja"
+                          className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-blue/10 border border-sw-blue/30 text-sw-blue text-sm font-bold uppercase tracking-widest hover:bg-sw-blue hover:text-black transition-all flex items-center gap-2`}
+                        >
+                          <DollarSign size={16} className="shrink-0" />
+                          {!isSidebarCollapsed && "Mov. de Caja"}
+                        </button>
+                        <button 
+                          onClick={() => setShowCloseShiftModal(true)}
+                          title="Cerrar Turno"
+                          className={`w-full py-2.5 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg bg-sw-red/10 border border-sw-red/30 text-sw-red text-sm font-bold uppercase tracking-widest hover:bg-sw-red hover:text-white transition-all flex items-center gap-2`}
+                        >
+                          <LogOut size={16} className="shrink-0" />
+                          {!isSidebarCollapsed && "Cerrar Turno"}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="space-y-2 w-full">
+                        <div className="w-full py-2.5 px-3 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-500 text-sm font-bold uppercase tracking-widest text-center">
+                          {!isSidebarCollapsed && "Solo Lectura"}
+                        </div>
+                        {(currentUser?.role === 'Admin' || currentUser?.email === 'inversioneselcactus@gmail.com') && (
+                          <button 
+                            onClick={() => setShowCloseShiftModal(true)}
+                            title="Forzar Cierre (Admin)"
+                            className={`w-full py-2 ${isSidebarCollapsed ? 'px-0 justify-center' : 'px-3 justify-center'} rounded-lg border border-sw-red/20 text-sw-red text-xs font-bold uppercase tracking-widest hover:bg-sw-red hover:text-white transition-all flex items-center gap-2`}
+                          >
+                            <ShieldAlert size={14} className="shrink-0" />
+                            {!isSidebarCollapsed && "Forzar Cierre"}
+                          </button>
+                        )}
+                      </div>
+                    )
                   ) : (
                     <button 
                       onClick={() => setShowOpenShiftModal(true)}
@@ -1231,14 +1293,10 @@ export default function App() {
                     addTimelineEvent={addTimelineEvent}
                     onCancelJob={(jobId: string) => {
                       setDetailModalJobId(jobId);
-                      // By setting the detail modal, the user can use the delete button inside it.
-                      // However, the user asked for a direct option on the card.
-                      // I will implement a separate state to show a quick cancel confirmation
-                      // or just leverage the detail modal's existing logic by auto-triggering the delete view?
-                      // Actually, let's just make a dedicated cancel state in App.tsx.
                       setCancelJobId(jobId);
                     }}
                     isAdmin={currentUser?.role === 'Admin' || currentUser?.email === 'inversioneselcactus@gmail.com' || currentUser?.email === 'starparkiquique@gmail.com' || currentUser?.email === 'daelpaso.digital@gmail.com'}
+                    isShiftOwner={isShiftOwner}
                   />
                 </AuthGuard>
               )}
@@ -1585,7 +1643,7 @@ export default function App() {
         )}
 
         {showCloseShiftModal && currentShift && (
-          <CloseShiftModal key="close-shift-modal" currentShift={currentShift} showToast={showToast} onClose={() => setShowCloseShiftModal(false)} jobs={jobs} />
+          <CloseShiftModal key="close-shift-modal" currentShift={currentShift} currentUser={currentUser} showToast={showToast} onClose={() => setShowCloseShiftModal(false)} jobs={jobs} />
         )}
 
         {showZReportModal && (

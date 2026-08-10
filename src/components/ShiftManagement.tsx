@@ -228,8 +228,11 @@ export const CashMovementModal = ({ currentShift, currentUser, onClose, showToas
   );
 };
 
-export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any) => {
-  const [step, setStep] = useState(1); // 1: Warning, 2: Pending Jobs, 3: Calculator
+export const CloseShiftModal = ({ currentShift, currentUser, onClose, showToast, jobs }: any) => {
+  const isOwner = currentShift.openedBy === (currentUser?.email || currentUser?.id);
+  const [step, setStep] = useState(isOwner ? 1 : 0); // 0: PIN, 1: Warning, 2: Pending Jobs, 3: Calculator
+  const [adminPin, setAdminPin] = useState('');
+  
   const [declaredCash, setDeclaredCash] = useState('');
   const [declaredCards, setDeclaredCards] = useState('');
   const [declaredTransfers, setDeclaredTransfers] = useState('');
@@ -360,7 +363,43 @@ export const CloseShiftModal = ({ currentShift, onClose, showToast, jobs }: any)
       }}
     >
       <AnimatePresence mode="wait">
-        {step === 1 ? (
+        {step === 0 ? (
+          <motion.div 
+            key="pin"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="panel-glass rounded-2xl w-full max-w-sm border border-sw-red/30 p-8 text-center space-y-6"
+          >
+            <div className="w-16 h-16 bg-sw-red/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-sw-red/50">
+              <ShieldAlert size={32} className="text-sw-red" />
+            </div>
+            <h2 className="text-xl font-black sw-title-font text-white tracking-widest uppercase mb-2">Autorización Requerida</h2>
+            <p className="text-[14px] text-gray-400 font-bold uppercase tracking-widest mb-6">Solo un administrador puede forzar el cierre de un turno ajeno.</p>
+            
+            <input 
+              type="password"
+              placeholder="PIN de Admin (1124)"
+              value={adminPin}
+              onChange={(e) => setAdminPin(e.target.value)}
+              className="w-full bg-black/50 border border-sw-red/50 focus:border-sw-red rounded-xl px-4 py-3 text-white text-center tracking-[0.5em] font-mono mb-4 focus:outline-none"
+            />
+            
+            <div className="flex gap-4">
+              <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-800 text-gray-500 font-bold uppercase tracking-widest text-[14px] hover:bg-white/5">Cancelar</button>
+              <button 
+                onClick={() => {
+                  if (adminPin === '1124') setStep(1);
+                  else { showToast('PIN Incorrecto', 'error'); setAdminPin(''); }
+                }} 
+                className="flex-1 py-3 rounded-xl bg-sw-red text-white font-bold uppercase tracking-widest text-[14px] shadow-[0_0_20px_rgba(231,76,60,0.3)] hover:scale-[1.02] transition-transform"
+              >
+                Verificar
+              </button>
+            </div>
+          </motion.div>
+        ) : step === 1 ? (
           <motion.div 
             key="warning"
             initial={{ scale: 0.9, opacity: 0 }}
